@@ -4,7 +4,15 @@
 
 ## What It Is
 
-A Playwright-powered research browser that intercepts all network traffic passing through an authenticated session — WebSocket frames, XHR, fetch — and routes it through a per-site plugin system. Plugins are both passive (capture + store) and active (inject, modify, act on the page). You log in once through a real visible Chromium window; the capture and action layer runs underneath transparently.
+A Playwright-powered research browser that intercepts all network traffic passing through an authenticated session — WebSocket frames, XHR, fetch — and stores everything raw to SQLite. You log in once through a real visible Chromium window; the capture layer runs underneath transparently on any site.
+
+## Build Phases
+
+**Phase 1 — Bones (this spec):** Universal capture layer. Browser launches, you browse, everything lands in SQLite. No per-site logic. Done when `SELECT * FROM captures WHERE domain = 'x.com'` returns real data.
+
+**Phase 2 — Query layer:** CLI to pull, filter, export captures as NDJSON.
+
+**Phase 3 — Plugin layer:** Per-site normalization and active actions built on top of proven raw data.
 
 ---
 
@@ -135,25 +143,18 @@ api-god plugins                        # list loaded plugins + match domains
 
 ---
 
-## File Structure
+## File Structure (Phase 1)
 
 ```
 API-God/
 ├── src/
-│   ├── index.js          # CLI entry point
-│   ├── browser.js        # Playwright launch + persistent context
-│   ├── interceptor.js    # CDP route + WS interception, event emitter
-│   ├── registry.js       # plugin loader + event router
-│   ├── storage.js        # better-sqlite3 wrapper
-│   ├── cli.js            # command parser
-│   └── plugins/
-│       ├── _template.js
-│       ├── axiom.js
-│       ├── oreilly.js
-│       └── x.js
+│   ├── index.js          # entry point — wires browser + interceptor + storage
+│   ├── browser.js        # Playwright launch, persistent context
+│   ├── interceptor.js    # CDP route interception + WS proxy injection
+│   └── storage.js        # better-sqlite3 wrapper
 ├── data/
-│   ├── session/          # persistent browser profile
-│   └── captures.db       # SQLite
+│   ├── session/          # persistent browser profile (gitignored)
+│   └── captures.db       # SQLite (gitignored)
 ├── docs/
 │   └── superpowers/specs/
 ├── package.json
@@ -162,17 +163,12 @@ API-God/
 
 ---
 
-## Build Order
+## Build Order (Phase 1 — Bones)
 
 1. `storage.js` — DB schema + save/query methods
 2. `browser.js` — Playwright launch, persistent context
-3. `interceptor.js` — CDP routes + WS proxy script
-4. `registry.js` — plugin loader, event routing, ctx builder
-5. `cli.js` + `index.js` — entry point + commands
-6. `plugins/_template.js` — documented starter
-7. `plugins/axiom.js` — first real plugin (Wallet Hunter use case)
-8. `plugins/oreilly.js` — second plugin (content API capture)
-9. `plugins/x.js` — third plugin (GraphQL timeline capture)
+3. `interceptor.js` — CDP routes + WS proxy injection script
+4. `index.js` — wires the three together, launches browser
 
 ---
 
