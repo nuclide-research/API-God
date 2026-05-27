@@ -1,0 +1,17 @@
+{
+  "name": "api-god",
+  "version": "0.1.0",
+  "description": "Universal browser interception layer — ride authenticated sessions, capture everything",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Nicholas-Kloster/API-God.git"
+  },
+  "author": "Nicholas Kloster",
+  "license": "MIT"
+}
