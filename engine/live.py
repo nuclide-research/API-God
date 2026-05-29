@@ -92,12 +92,6 @@ def process(ev, zone):
 
 def _emit(rec):
     with lock: survivors.append(rec)
-    try:                                              # log the scored coin for the outcome loop (non-fatal)
-        record({"mint": rec.get("mint"), "creator": rec.get("creator"), "score": rec.get("score"),
-                "features": {"zone": rec.get("zone"), "verified": rec.get("verified"),
-                             "independent": rec.get("independent"), "serial": rec.get("serial")}})
-    except Exception:
-        pass
 
 async def stream_once(ws, ex, deadline):
     await ws.send(json.dumps({"method": "subscribeNewToken"}))
@@ -165,6 +159,12 @@ def summarize():
         if wc > 1 or ac > 1:
             s["score"] -= 2 + (1 if wc > 1 and ac > 1 else 0); s["serial"] = max(wc, ac)
             s["notes"].append(f"cluster w{wc}/a{ac}")
+    for s in survivors:                                  # outcome-ledger record: AFTER clustering (serial known), single-threaded (no race)
+        try:
+            record({"mint": s.get("mint"), "creator": s.get("creator"), "score": s.get("score"),
+                    "features": {"zone": s.get("zone"), "verified": s.get("verified"),
+                                 "independent": s.get("independent"), "serial": s.get("serial")}})
+        except Exception: pass
     ver = [s for s in survivors if s.get("verified")]
     out.append(f"verified: {len(ver)} | serial wallets: {len([c for c,m in by_creator.items() if len(m)>1])}")
     out.append("top:")

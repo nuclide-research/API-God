@@ -59,10 +59,14 @@ def _dexscreener(mint):
     except Exception:
         return {}
     if not pairs: return {"migrated": 0}
-    deepest = max(pairs, key=lambda x: (x.get("liquidity") or {}).get("usd") or 0)
-    return {"migrated": 1, "price_usd": float(deepest.get("priceUsd") or 0) or None,
-            "liq_usd": round(sum((p.get("liquidity") or {}).get("usd") or 0 for p in pairs), 2),
-            "vol24h": round(sum((p.get("volume") or {}).get("h24") or 0 for p in pairs), 2),
+    real = [p for p in pairs if (p.get("dexId") or "").lower() not in ("pumpfun", "pump")]  # graduated off the curve
+    use = real or pairs
+    deepest = max(use, key=lambda x: (x.get("liquidity") or {}).get("usd") or 0)
+    return {"migrated": 1 if real else 0,            # 1 only if listed on a real DEX, not the pump.fun curve
+            "dex": deepest.get("dexId"),
+            "price_usd": float(deepest.get("priceUsd") or 0) or None,
+            "liq_usd": round(sum((p.get("liquidity") or {}).get("usd") or 0 for p in use), 2),
+            "vol24h": round(sum((p.get("volume") or {}).get("h24") or 0 for p in use), 2),
             "mcap": deepest.get("marketCap")}
 
 def collect_outcome(mint):
@@ -120,7 +124,7 @@ def stats():
     print("label distribution:", dict(rows))
     bands = c.execute("""SELECT CASE WHEN score>=4 THEN 'high(>=4)' WHEN score>=1 THEN 'mid(1-3)' ELSE 'low(<1)' END band,
                                 COUNT(*) n,
-                                SUM(outcome IN ('MOON','FLAT','ALIVE','ALIVE-CONCENTRATED')) survived,
+                                SUM(outcome IN ('MOON','FLAT','ALIVE')) survived,
                                 SUM(outcome='MOON') mooned
                          FROM scored WHERE outcome IS NOT NULL GROUP BY band""").fetchall()
     print("by engine score band (the backtest: does a higher score predict a better outcome?):")

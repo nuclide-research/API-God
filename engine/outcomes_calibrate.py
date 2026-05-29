@@ -13,7 +13,7 @@ import numpy as np
 from outcomes import DB
 
 WEIGHTS = os.path.join(os.path.dirname(__file__), "config", "weights.json")
-GOOD = {"MOON", "FLAT", "ALIVE", "ALIVE-CONCENTRATED"}   # "survived / good"; DEAD = bad
+GOOD = {"MOON", "FLAT", "ALIVE"}   # "survived / good"; DEAD and ALIVE-CONCENTRATED (rug-risk) are bad
 MIN_SAMPLES = 30
 DELTA_CAP = 0.10                                         # +/-10% weight change per cycle (no whiplash)
 FEATURES = ["zone_red", "verified", "independent", "serial"]
@@ -50,7 +50,7 @@ def calibrate(db=DB, out=WEIGHTS):
     Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.2, random_state=42, stratify=strat)
     m = LogisticRegression(class_weight="balanced", max_iter=2000).fit(Xtr, ytr)
     tr, te = m.score(Xtr, ytr), m.score(Xte, yte)
-    mi = mutual_info_classif(X, y, discrete_features=[True, True, False, True], random_state=42)
+    mi = mutual_info_classif(X, y, discrete_features=[True, True, True, True], random_state=42)  # independent is a small count
     coefs = m.coef_[0]; mx = max(abs(coefs)) or 1.0
     flags = []
     if tr - te > 0.15: flags.append("overfit/survivorship-bias: test acc >15% below train -> do not trust update")
