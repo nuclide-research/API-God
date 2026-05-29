@@ -1,4 +1,4 @@
-# API-God — Solana Memecoin Signal Engine
+# API-God: Solana Memecoin Signal Engine
 
 A headless engine that watches every new Solana memecoin the moment it mints, figures out the X
 account/tweet behind it, scores how much it deserves attention, and ranks the survivors. It runs on
@@ -25,17 +25,17 @@ pump.fun firehose  ->  token metadata JSON  ->  X syndication CDN
 source -> gate -> enrich -> resolve -> score -> discovery
 ```
 
-1. **source** — one PumpPortal websocket (`subscribeNewToken`), free. Mint, creator wallet, name, symbol,
+1. **source**: one PumpPortal websocket (`subscribeNewToken`), free. Mint, creator wallet, name, symbol,
    metadata URI, dev-buy size.
-2. **gate** — SPC self-calibrating zones (green/amber/red from the live stream's own p80/p95) + name
+2. **gate**: SPC self-calibrating zones (green/amber/red from the live stream's own p80/p95) + name
    dedup. Suppresses ~75% as noise before any network call. The cutoff is computed, not guessed.
-3. **enrich** — fetch the metadata JSON (IPFS gateway pool), pull the `twitter` link.
-4. **resolve** — resolve the linked tweet via the syndication CDN. Branches on the failure modes
+3. **enrich**: fetch the metadata JSON (IPFS gateway pool), pull the `twitter` link.
+4. **resolve**: resolve the linked tweet via the syndication CDN. Branches on the failure modes
    (404 / tombstone / empty). Checks: does the tweet reference the coin, or is it riding a stranger's
    tweet (impersonation)? Does the URL handle match the real author (spoof)?
-5. **score** — zone + verification + serial-wallet/author cluster penalty (catches farmers spraying many
+5. **score**: zone + verification + serial-wallet/author cluster penalty (catches farmers spraying many
    coins). Tombstone and big-buy-no-socials are flagged, not rewarded.
-6. **discovery** — *(needs `XAI_API_KEY`)* searches the contract address (and ticker) to count
+6. **discovery**: *(needs `XAI_API_KEY`)* searches the contract address (and ticker) to count
    independent accounts posting it, the one signal the creator does not control. Gated to candidates that
    survived the free stages, so the paid call only fires on ~8% of the firehose.
 

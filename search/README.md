@@ -74,12 +74,12 @@ The tag shows who found each account: `S` = the free search, `X` = the paid sear
 
 ## Options
 
-- `--backend session|xai|both` — which search to use (default: `session`)
-- `--tab live|top` — newest posts, or most-engaged (default: `live`)
-- `--pages N` — how many times to scroll for more results (default: 5)
-- `--sort engagement|recent` — how to rank the output
-- `--out FILE` / `--json` — write or print every post as structured data
-- `--limit N` — how many accounts to show in the readable list
+- `--backend session|xai|both`: which search to use (default: `session`)
+- `--tab live|top`: newest posts, or most-engaged (default: `live`)
+- `--pages N`: how many times to scroll for more results (default: 5)
+- `--sort engagement|recent`: how to rank the output
+- `--out FILE` / `--json`: write or print every post as structured data
+- `--limit N`: how many accounts to show in the readable list
 
 ## Tips
 
