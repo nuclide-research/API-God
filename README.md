@@ -1,74 +1,46 @@
-# API-God: Solana Memecoin Signal Engine
+# API-God
 
-A headless engine that watches every new Solana memecoin the moment it mints, figures out the X
-account/tweet behind it, scores how much it deserves attention, and ranks the survivors. It runs on
-**free, key-less public data**: no $30k/mo X API, no paid firehose, no browser.
+Find who's talking about anything on X (Twitter), for free. No API key. No $30,000-a-month data bill.
 
-> Status: **validated Python prototype.** The logic below has been proven on real live mints. The
-> production target is a single Go binary (see `docs/superpowers/specs/`); the prototype is the
-> reference implementation. The retired Node browser-capture tool lives in `legacy/`.
+## What it does
 
-## The idea (why it costs nothing)
+Give it a search: a topic, a person, a company, a coin, a hashtag, an event, anything. It finds the
+people on X posting about it and hands you a clean list: who they are, what they said, and how much
+engagement each post got. Sortable, saveable, structured.
 
-You don't search for the signal, the coin hands it to you. Every pump.fun mint embeds a metadata link;
-that metadata carries the project's X URL; and any public tweet resolves through Twitter's own embed CDN
-with no auth. Three free hops:
+It does this without X's paid API, which costs tens of thousands of dollars a month for this kind of
+access.
 
-```
-pump.fun firehose  ->  token metadata JSON  ->  X syndication CDN
-(new mint, WS)         (the twitter: link)      (the actual tweet, no key)
-```
-
-## Pipeline
+## The tool: xsearch
 
 ```
-source -> gate -> enrich -> resolve -> score -> discovery
+cd search
+pip install -r requirements.txt
+python xsearch.py --login          # one-time login, for the free backend
+python xsearch.py "any topic"      # then search anything
+python xsearch.py '$TICKER'
+python xsearch.py "a person or company"
 ```
 
-1. **source**: one PumpPortal websocket (`subscribeNewToken`), free. Mint, creator wallet, name, symbol,
-   metadata URI, dev-buy size.
-2. **gate**: SPC self-calibrating zones (green/amber/red from the live stream's own p80/p95) + name
-   dedup. Suppresses ~75% as noise before any network call. The cutoff is computed, not guessed.
-3. **enrich**: fetch the metadata JSON (IPFS gateway pool), pull the `twitter` link.
-4. **resolve**: resolve the linked tweet via the syndication CDN. Branches on the failure modes
-   (404 / tombstone / empty). Checks: does the tweet reference the coin, or is it riding a stranger's
-   tweet (impersonation)? Does the URL handle match the real author (spoof)?
-5. **score**: zone + verification + serial-wallet/author cluster penalty (catches farmers spraying many
-   coins). Tombstone and big-buy-no-socials are flagged, not rewarded.
-6. **discovery**: *(needs `XAI_API_KEY`)* searches the contract address (and ticker) to count
-   independent accounts posting it, the one signal the creator does not control. Gated to candidates that
-   survived the free stages, so the paid call only fires on ~8% of the firehose.
+Three ways to run it:
 
-The control-loop shape (deadband, alarm zones, watchdog, historian) is borrowed from industrial SCADA.
+- **session**: free. Uses your own X login.
+- **xai**: about half a cent per search. No login, no account risk (needs an xAI key).
+- **both**: runs the two together and merges the results.
 
-## Run it
+Full guide: `search/README.md`.
 
-```bash
-pip install -r engine/requirements.txt
-cd engine
+## One example of what you can build on it: a Solana coin tracker
 
-python replay.py /path/to/mints.jsonl   # replay scoring over captured mints (no network for source)
-python live.py                          # live: stream pump.fun, score in real time (~9 min run)
-python stress.py                        # adversarial battery against the decision logic
-python solana_search.py                 # standalone: search X for a topic, enrich results for free
-```
-
-`discovery` and `solana_search` go live only when `XAI_API_KEY` (developer key from console.x.ai) is set;
-without it they cleanly no-op so the rest runs free.
-
-## What it does NOT do
-
-- It does not trade. It produces a ranked list of attention; nothing touches a wallet.
-- It does not yet track outcomes (whether a scored coin later rugged or mooned). That feedback loop is
-  scoped in `docs/superpowers/specs/` and is the next build.
-- It is a strong spam filter, not yet a trust scorer. Every positive signal except `discovery` is
-  something the coin's own creator controls, and is therefore forgeable. The independent and outcome
-  signals are what turn filtering into trust.
+`engine/` is a prototype that points the same idea at one specific use. It watches new Solana coins the
+moment they launch, finds the X account behind each, and ranks them. It is an **example**, one
+application of the search tool, not the purpose of the project. The search tool is the general thing.
 
 ## Layout
 
 ```
-engine/      validated Python prototype (engine_core + live/replay/discovery/stress/search)
-legacy/      retired Node/Playwright browser-capture tool
-docs/        design specs (engine design, outcome-loop scope)
+search/   xsearch: find who's talking about anything on X
+engine/   example app: a Solana coin-tracking prototype built on the same idea
+legacy/   retired Node browser-capture tool
+docs/     design notes
 ```
