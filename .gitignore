@@ -5,3 +5,7 @@ data/
 sessions/
 dist/
 .DS_Store
+__pycache__/
+*.pyc
+*.jsonl
+data/captures.db

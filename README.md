@@ -1,120 +1,74 @@
-# API-God
+# API-God — Solana Memecoin Signal Engine
 
-Universal browser interception layer. Log in once through a real Chromium
-window, then everything that session touches is captured to SQLite.
+A headless engine that watches every new Solana memecoin the moment it mints, figures out the X
+account/tweet behind it, scores how much it deserves attention, and ranks the survivors. It runs on
+**free, key-less public data**: no $30k/mo X API, no paid firehose, no browser.
 
-Most recon tooling fights the auth wall: it scrapes from outside, juggles API
-keys, or replays cookies that go stale. API-God sidesteps the problem. It drives
-a visible, persistent browser. You authenticate by hand the way a human would,
-the cookies live on disk, and a transparent capture layer underneath records
-every request, response, and WebSocket frame the page makes. Per-site plugins
-turn the raw stream into structured records when a site is worth normalizing.
-Operate it only against your own accounts and authorized targets.
+> Status: **validated Python prototype.** The logic below has been proven on real live mints. The
+> production target is a single Go binary (see `docs/superpowers/specs/`); the prototype is the
+> reference implementation. The retired Node browser-capture tool lives in `legacy/`.
 
-## Install
+## The idea (why it costs nothing)
 
-```
-git clone https://github.com/nuclide-research/API-God
-cd API-God
-npm install
-npx playwright install chromium
-```
-
-Node 18+ (uses ESM and `node --watch`). Two dependencies: `playwright` (drives
-Chromium) and `better-sqlite3` (the capture store). `npx playwright install`
-downloads the Chromium build Playwright needs the first time.
-
-## Usage
+You don't search for the signal, the coin hands it to you. Every pump.fun mint embeds a metadata link;
+that metadata carries the project's X URL; and any public tweet resolves through Twitter's own embed CDN
+with no auth. Three free hops:
 
 ```
-npm start                                   # launch the browser, begin capturing
-node src/index.js                           # same as npm start
-node src/index.js query                     # dump the last 200 captures as NDJSON
-node src/index.js query x.com               # only captures for one domain
-node src/index.js query x.com --type x-tweet  # filter by capture type
-node src/index.js query x.com --limit 50    # cap the row count
-node src/index.js query x.com --pretty      # pretty-print parsed data (-p)
-node src/index.js stats                     # per-domain / per-type counts table
+pump.fun firehose  ->  token metadata JSON  ->  X syndication CDN
+(new mint, WS)         (the twitter: link)      (the actual tweet, no key)
 ```
 
-Run with no subcommand to start a session. A visible Chromium window opens on a
-persistent profile at `data/session/`. Browse and log in normally. Every HTTP
-request and response (minus static assets and analytics beacons) and every
-WebSocket frame lands in `data/captures.db`. Cookies survive restarts, so you
-authenticate once. Stop with Ctrl+C.
-
-`query` prints one JSON object per line (NDJSON) to stdout, newest first, so it
-pipes cleanly into `jq` or another file. `--pretty` parses each row's `data`
-blob and prints it indented with `_id`, `_ts`, `_type`, and `_url` attached.
-
-### Subcommands
-
-| Command | Arguments | What it does |
-|---------|-----------|--------------|
-| (default) | none | Launch the browser and capture everything until Ctrl+C |
-| `query` | `[domain] [--type T] [--limit N] [--pretty\|-p]` | Read captures back as NDJSON |
-| `stats` | none | Print a table of capture counts grouped by domain and type |
-
-`--limit` defaults to 200 on the CLI. `domain` is optional; omit it to query
-across all domains.
-
-### Capture types
-
-The interceptor writes these `type` values:
-
-| Type | Source |
-|------|--------|
-| `request` | Every non-skipped outgoing HTTP request (headers + body) |
-| `response` | JSON and text responses (headers + body, status) |
-| `ws-send` / `ws-recv` | WebSocket frames, by direction |
-
-Static assets (fonts, images, CSS, source maps, media) and common analytics
-hosts are skipped to keep the noise down.
-
-## Plugins
-
-Plugins live in `src/plugins/` and load automatically at startup. A plugin
-matches a URL and transforms the raw response or WebSocket frame into structured
-records. When a plugin matches, its records are saved instead of the raw
-capture. Three ship in this repo:
-
-| Plugin | Matches | Emits |
-|--------|---------|-------|
-| `axiom` | `axiom.trade` REST and socket.io feeds | `axiom-token`, `axiom-alert` records normalized from the trending feed |
-| `shodan` | `shodan.io` search result pages and `api.shodan.io` | `shodan-host` records parsed from the authenticated session, no API key |
-| `x` | `x.com` `SearchTimeline` GraphQL responses | `x-tweet` records with author, text, and metrics |
-
-A plugin is a default-exported object with a `name`, a `match(url)` predicate,
-and one or more of `onResponse(url, body)`, `onWebSocket(frame)`, and
-`onPageLoad(url, page)`. Files prefixed with `_` are skipped by the loader. Each
-hook returns an array of records to save, or null to fall through to the raw
-capture. Restart to pick up plugin changes.
-
-## Scripts
-
-Helper scripts under `scripts/` reuse the same browser and storage modules:
+## Pipeline
 
 ```
-node scripts/nav.js https://www.shodan.io --wait 3000   # navigate once, report what got captured
-node scripts/shodan-search.js "<query>" --pages 5       # paginate Shodan results via the session DOM
+source -> gate -> enrich -> resolve -> score -> discovery
 ```
 
-`scripts/shodan-search.js` drives the persistent session to page through Shodan
-search results and extract host records straight from the DOM, no API key. It
-takes `--pages N`, `--start-page N`, `--delay N`, and `--headless`. If it hits a
-login wall it pauses for you to log in, then continues.
+1. **source** — one PumpPortal websocket (`subscribeNewToken`), free. Mint, creator wallet, name, symbol,
+   metadata URI, dev-buy size.
+2. **gate** — SPC self-calibrating zones (green/amber/red from the live stream's own p80/p95) + name
+   dedup. Suppresses ~75% as noise before any network call. The cutoff is computed, not guessed.
+3. **enrich** — fetch the metadata JSON (IPFS gateway pool), pull the `twitter` link.
+4. **resolve** — resolve the linked tweet via the syndication CDN. Branches on the failure modes
+   (404 / tombstone / empty). Checks: does the tweet reference the coin, or is it riding a stranger's
+   tweet (impersonation)? Does the URL handle match the real author (spoof)?
+5. **score** — zone + verification + serial-wallet/author cluster penalty (catches farmers spraying many
+   coins). Tombstone and big-buy-no-socials are flagged, not rewarded.
+6. **discovery** — *(needs `XAI_API_KEY`)* searches the contract address (and ticker) to count
+   independent accounts posting it, the one signal the creator does not control. Gated to candidates that
+   survived the free stages, so the paid call only fires on ~8% of the firehose.
 
-## Status
+The control-loop shape (deadband, alarm zones, watchdog, historian) is borrowed from industrial SCADA.
 
-v0.1.0. The capture layer, the SQLite store, the `query` and `stats`
-subcommands, and the three plugins above are working. The plugin selection
-flags, active-action runner, and time filters sketched in the design spec
-(`docs/`) are not implemented yet. Visible browser only, no headless start, no
-hot reload: restart to pick up changes.
+## Run it
 
-This is operator tooling. It rides your own authenticated sessions. Point it
-only at accounts and targets you are authorized to access.
+```bash
+pip install -r engine/requirements.txt
+cd engine
 
-## License
+python replay.py /path/to/mints.jsonl   # replay scoring over captured mints (no network for source)
+python live.py                          # live: stream pump.fun, score in real time (~9 min run)
+python stress.py                        # adversarial battery against the decision logic
+python solana_search.py                 # standalone: search X for a topic, enrich results for free
+```
 
-MIT. Part of the NuClide toolchain.
+`discovery` and `solana_search` go live only when `XAI_API_KEY` (developer key from console.x.ai) is set;
+without it they cleanly no-op so the rest runs free.
+
+## What it does NOT do
+
+- It does not trade. It produces a ranked list of attention; nothing touches a wallet.
+- It does not yet track outcomes (whether a scored coin later rugged or mooned). That feedback loop is
+  scoped in `docs/superpowers/specs/` and is the next build.
+- It is a strong spam filter, not yet a trust scorer. Every positive signal except `discovery` is
+  something the coin's own creator controls, and is therefore forgeable. The independent and outcome
+  signals are what turn filtering into trust.
+
+## Layout
+
+```
+engine/      validated Python prototype (engine_core + live/replay/discovery/stress/search)
+legacy/      retired Node/Playwright browser-capture tool
+docs/        design specs (engine design, outcome-loop scope)
+```

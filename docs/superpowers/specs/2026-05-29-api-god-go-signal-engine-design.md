@@ -137,7 +137,7 @@ apigod query mints   [--since --min-mcap --has-twitter]
 apigod query tweets  [--since --verified --handle]
 apigod query signals [--since --min-score]
 apigod resolve <tweet-url|id>      # one-shot syndication resolve (also the test surface)
-apigod enrich  <metadata-uri|mint> # one-shot socials extraction
+apigod enrich  <metadata-uri>      # one-shot socials extraction (mint->uri via DAS arrives in P2)
 apigod stats                       # row counts / rates by table
 # (P2) apigod watch --handles ...
 ```
