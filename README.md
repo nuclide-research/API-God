@@ -119,15 +119,28 @@ stays close to the case that works. Heavy cloud-side use does not.
 
 ## One example of what you can build on it: a Solana coin tracker
 
-`engine/` is a prototype that points the same idea at one specific use. It watches new Solana coins the
-moment they launch, finds the X account behind each, and ranks them. It is an **example**, one
-application of the search tool, not the purpose of the project. The search tool is the general thing.
+`engine/` is a prototype that points the same idea at one specific use: the flood of new Solana coins
+launching every minute. It is an **example**, one application, not the purpose of the project. The
+search tool above is the general thing.
+
+Given the firehose, the engine:
+1. Drops the ~95% that is junk with a self-calibrating filter (it reads the live stream's own
+   distribution instead of a fixed cutoff) plus name dedup, before any network call.
+2. For the survivors, finds the X account behind each coin, checks whether the linked tweet really
+   mentions the coin or is riding a stranger's, and flags wallets spraying many coins.
+3. Ranks what is left.
+
+It also has a **learning loop** (`outcomes.py`, `outcomes_calibrate.py`): it logs every coin it scored,
+hours later reads on-chain what actually happened (died, still trading, graduated to a real DEX), labels
+the outcome, and a calibrator learns which signals predicted the good ones and proposes weight changes.
+That is what lets it improve instead of staying a fixed guess. Honest limit: the loop only has a verdict
+once coins have aged a few hours. Details in `docs/` and `engine/README.md`.
 
 ## Layout
 
 ```
-search/   xsearch: find who's talking about anything on X
-engine/   example app: a Solana coin-tracking prototype built on the same idea
+search/   xsearch: find who's talking about anything on X (the product)
+engine/   example app: a Solana coin tracker + a learning loop that scores its own picks against outcomes
 legacy/   retired Node browser-capture tool
-docs/     design notes
+docs/     design notes (engine design, outcome-feedback-loop spec)
 ```
