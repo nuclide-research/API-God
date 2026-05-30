@@ -1,14 +1,14 @@
 """Live engine (engine_core logic) + resilience fixes: bounded WS reconnect w/ backoff,
 SAFE_MODE with decay/auto-exit, boot watchdog (soft), tombstone penalty."""
-import asyncio, json, time, sys, threading
+import asyncio, json, os, time, sys, threading
 from collections import deque, defaultdict, Counter
 from concurrent.futures import ThreadPoolExecutor
 import websockets, requests
-from engine_core import norm_name, cashtag_hit, classify, zone_of, score_resolved, fetch_meta, independent_bonus
+from engine_core import norm_name, cashtag_hit, classify, zone_of, score_resolved, fetch_meta, independent_bonus, dedup_name
 from discovery import discover_independent
 from outcomes import record
 
-BUDGET = 540; DEDUP_S = 300
+BUDGET = int(os.environ.get("ENGINE_BUDGET", "540"))   # ENGINE_BUDGET overrides the run length (seconds)
 RAW = "/tmp/mints2.jsonl"; SUMMARY = "/tmp/run2_summary.txt"
 GATEWAYS = ["https://pump.mypinata.cloud/ipfs/", "https://ipfs.io/ipfs/", "https://cloudflare-ipfs.com/ipfs/"]
 
@@ -106,13 +106,13 @@ async def stream_once(ws, ex, deadline):
             continue
         if "message" in d: print("ack:", d["message"]); continue
         events.append(d)
+        d["_ts"] = time.time()                 # stamp arrival time so a replay reproduces this dedup
         with open(RAW, "a") as f: f.write(json.dumps(d) + "\n")
-        buy = d.get("solAmount") or 0; nm = norm_name(d.get("name")); now = time.monotonic()
+        buy = d.get("solAmount") or 0; nm = norm_name(d.get("name"))
         with lock: devbuf.append(buy)
-        if nm and nm in last_name and now - last_name[nm] < DEDUP_S:
+        if dedup_name(nm, d["_ts"], last_name):
             with lock: gaps["dedup_name"] += 1
-            last_name[nm] = now; continue
-        last_name[nm] = now
+            continue
         z = zone_of(buy, list(devbuf))
         with lock: zone_count[z] += 1
         if z == "green":

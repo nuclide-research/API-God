@@ -1,5 +1,5 @@
 """Shared, hardened decision logic for the memecoin signal engine.
-Single source of truth imported by engine2.py (live), engine2_replay.py (test), stress.py (battery)."""
+Single source of truth imported by live.py, replay.py, and stress.py."""
 import re, unicodedata, json as _json
 
 # common English words that double as tickers -> a BARE mention is generic chatter; require $CASHTAG
@@ -15,6 +15,19 @@ def norm_name(n):
     s = unicodedata.normalize("NFKC", n).casefold()
     s = re.sub(r'\s+', '', s)
     return re.sub(r'[^\w]', '', s, flags=re.UNICODE)
+
+DEDUP_WINDOW_S = 300   # a same-name mint within this many seconds of the prior one is a duplicate
+
+def dedup_name(nm, clock, last_seen, window=DEDUP_WINDOW_S):
+    """Shared name-dedup for both the live engine and the replay harness, so a replay reproduces the
+    live run's dedup exactly instead of guessing. nm: normalized name. clock: a seconds-valued stamp
+    (live passes each event's arrival time, replay passes the captured _ts). last_seen: a dict the
+    caller owns. Records last_seen[nm]=clock and returns True if nm was seen within `window` of clock."""
+    if not nm:
+        return False
+    prev = last_seen.get(nm)
+    last_seen[nm] = clock
+    return prev is not None and (clock - prev) < window
 
 def cashtag_hit(sym, text):
     if not sym or not text: return False

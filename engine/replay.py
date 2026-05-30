@@ -4,11 +4,11 @@ import json, sys, threading
 from collections import deque, defaultdict, Counter
 from concurrent.futures import ThreadPoolExecutor
 import requests
-from engine_core import norm_name, cashtag_hit, classify, zone_of, score_resolved, fetch_meta, independent_bonus
+from engine_core import norm_name, cashtag_hit, classify, zone_of, score_resolved, fetch_meta, independent_bonus, dedup_name
 from discovery import discover_independent
 
 SRC = sys.argv[1] if len(sys.argv) > 1 else "/tmp/mints.jsonl"
-ROLL = 200; DEDUP_IDX = 50
+ROLL = 200; DEDUP_IDX_FALLBACK = 50   # index-window dedup only for old captures that predate _ts
 GATEWAYS = ["https://pump.mypinata.cloud/ipfs/", "https://ipfs.io/ipfs/", "https://cloudflare-ipfs.com/ipfs/"]
 
 lock = threading.Lock()
@@ -79,15 +79,18 @@ def _emit(rec):
     with lock: survivors.append(rec)
 
 events = [json.loads(l) for l in open(SRC) if l.strip()]
+has_ts = bool(events) and "_ts" in events[0]      # live stamps _ts; captures predating that lack it
+if not has_ts:
+    print("note: capture has no _ts (pre-reconcile); index-window dedup, not identical to a live run")
 print(f"replaying {len(events)} mints (engine_core logic) ...")
 ex = ThreadPoolExecutor(max_workers=8)
 for i, ev in enumerate(events):
     buy = ev.get("solAmount") or 0; nm = norm_name(ev.get("name"))
     by_creator[ev.get("traderPublicKey")].append(ev.get("mint"))
     devbuf.append(buy)
-    if nm and nm in last_name and i - last_name[nm] < DEDUP_IDX:
-        gaps["dedup_name"] += 1; last_name[nm] = i; continue
-    last_name[nm] = i
+    dup = dedup_name(nm, ev["_ts"], last_name) if has_ts else dedup_name(nm, i, last_name, window=DEDUP_IDX_FALLBACK)
+    if dup:
+        gaps["dedup_name"] += 1; continue
     z = zone_of(buy, list(devbuf)); zone_count[z] += 1
     if z == "green": gaps["suppressed_green"] += 1; continue
     ex.submit(process, ev, z)
