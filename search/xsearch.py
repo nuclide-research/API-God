@@ -143,6 +143,39 @@ def extract_user_timeline(data):
     return out
 
 
+def extract_list_timeline(data):
+    """Walk a ListLatestTweetsTimeline body -> list of rich records. Multi-author by nature: one call
+    returns every member's recent tweets (proven 22 authors / 1 call). Path is list.tweets_timeline."""
+    out = []
+    ins_list = None
+    for path in (("list", "tweets_timeline"), ("list", "timeline_response", "timeline")):
+        node = data.get("data", {})
+        for k in path:
+            node = node.get(k, {}) if isinstance(node, dict) else {}
+        try:
+            ins_list = node["timeline"]["instructions"]
+            break
+        except (KeyError, TypeError):
+            continue
+    if not ins_list:
+        return out
+    for ins in ins_list:
+        if ins.get("type") != "TimelineAddEntries":
+            continue
+        for entry in ins.get("entries", []):
+            content = entry.get("content", {})
+            ic = content.get("itemContent", {})
+            if ic.get("itemType") == "TimelineTweet":
+                r = _parse_timeline_tweet(ic)
+                if r: out.append(r)
+            for item in content.get("items", []):
+                ic2 = item.get("item", {}).get("itemContent", {})
+                if ic2.get("itemType") == "TimelineTweet":
+                    r = _parse_timeline_tweet(ic2)
+                    if r: out.append(r)
+    return out
+
+
 def _drain_budget(first, delay):
     """Seconds to wait for a SearchTimeline response. The non-first budget tracks the scroll delay
     so a slow response is not cut off and pagination is not truncated (finding #2)."""
@@ -255,11 +288,58 @@ async def find_track(handle, replies, pages, delay, headed):
     return list(seen.values())
 
 
+# ---------- backend: list (free, rides session, ONE call multiplexes every member) ----------
+async def find_list(list_id, pages, delay, headed):
+    """Track a whole List via ListLatestTweetsTimeline. ONE call returns all members' recent tweets,
+    on the list endpoint's own rate-limit bucket (proven 22 distinct authors in a single response)."""
+    if not STATE.exists():
+        print("[list] no saved session (run: python xsearch.py --login) - skipping", file=sys.stderr)
+        return []
+    from playwright.async_api import async_playwright
+    list_id = str(list_id).strip()
+    url = f"https://x.com/i/lists/{list_id}"
+    seen = {}
+    bodies = asyncio.Queue()
+
+    async def on_response(resp):
+        if "ListLatestTweetsTimeline" in resp.url:
+            try: await bodies.put(await resp.json())
+            except Exception: pass
+
+    async def drain(first=False):
+        budget = _drain_budget(first, delay)
+        waited = 0.0
+        while waited < budget and bodies.empty():
+            await asyncio.sleep(0.5); waited += 0.5
+        while not bodies.empty():
+            for r in extract_list_timeline(await bodies.get()):
+                if r["id"] not in seen:
+                    seen[r["id"]] = r
+
+    async with async_playwright() as pw:
+        b = await pw.chromium.launch(headless=not headed, args=["--disable-blink-features=AutomationControlled"])
+        c = await b.new_context(storage_state=str(STATE))
+        p = await c.new_page()
+        p.on("response", on_response)
+        await p.goto(url, wait_until="domcontentloaded", timeout=30000)
+        await drain(first=True)
+        for _ in range(max(0, pages - 1)):
+            before = len(seen)
+            await p.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            await p.wait_for_timeout(delay)
+            await drain()
+            if len(seen) == before:
+                break
+        await b.close()
+    return list(seen.values())
+
+
 # ---------- rate-limit probe (burner-account only) ----------
-async def probe_session(url, marker, max_req, delay):
-    """Hammer one endpoint by scrolling `url` up to max_req times, log every `marker` response's HTTP
-    status with a timestamp, and stop at the first non-200 (where X cuts us off). Run on a throwaway
-    account: finding the limit means tripping it."""
+async def probe_session(url, marker, max_req, delay, reload=False):
+    """Hammer one endpoint up to max_req times, log every `marker` response's HTTP status with a
+    timestamp, and stop at the first non-200 (where X cuts us off). Scroll mode paginates one view;
+    reload mode re-navigates each time, needed when one view runs out of pagination before the rate
+    limit (a profile timeline does). Run on a throwaway account: finding the limit means tripping it."""
     if not STATE.exists():
         sys.exit("[probe] no saved session (run: python xsearch.py --login)")
     from playwright.async_api import async_playwright
@@ -284,10 +364,55 @@ async def probe_session(url, marker, max_req, delay):
         for _ in range(max_req):
             if hit.is_set():
                 break
-            await p.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            await p.wait_for_timeout(delay)
+            if reload:                                          # fresh request each time (beats pagination depth)
+                before = len(log)
+                try: await p.goto(url, wait_until="commit", timeout=30000)
+                except Exception: pass
+                for _ in range(16):                             # wait for this reload's response, do not abort it
+                    if len(log) > before or hit.is_set():
+                        break
+                    await p.wait_for_timeout(250)
+            else:
+                await p.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                await p.wait_for_timeout(delay)
         await b.close()
     return log
+
+
+# ---------- keyless hydration (no account, no per-token wall, ~146/min on one IP) ----------
+def _cdn_resolve(tid, source="hydrate"):
+    """Resolve one tweet id -> a rich record via the syndication CDN (keyless). None on miss.
+    The hydration primitive shared by the xai backend and --hydrate."""
+    try:
+        tr = requests.get(f"https://cdn.syndication.twimg.com/tweet-result?id={tid}&token=x&lang=en", timeout=10)
+        if tr.status_code != 200: return None
+        t = tr.json()
+        if not t or t.get("__typename") != "Tweet": return None
+    except Exception:
+        return None
+    usr = t.get("user", {})
+    return _rec(str(tid), "@" + (usr.get("screen_name") or ""), usr.get("name") or "",
+                (t.get("text") or "").replace("\n", " "), t.get("created_at") or "",
+                f"https://x.com/{usr.get('screen_name')}/status/{tid}",
+                t.get("favorite_count") or 0, t.get("conversation_count") or 0, 0, source,
+                blue=usr.get("is_blue_verified", False))
+
+
+def find_hydrate(ids, delay_ms=450):
+    """Keyless bulk-hydrate: tweet ids -> full records via the CDN. No account, no per-token wall;
+    paced to stay under the ~146/min IP ceiling. The high-yield half of the pipeline."""
+    import time as _t
+    out = []
+    n = len(ids)
+    for i, tid in enumerate(ids):
+        tid = str(tid).strip()
+        if not tid.isdigit():
+            continue
+        r = _cdn_resolve(tid, "hydrate")
+        if r: out.append(r)
+        if delay_ms and i + 1 < n:
+            _t.sleep(delay_ms / 1000.0)
+    return out
 
 
 # ---------- backend: xai (clean, ~$0.005/search, no account risk) ----------
@@ -318,19 +443,8 @@ def find_xai(query):
         if not m: continue
         tid = m.group(1)
         if tid in out: continue
-        try:
-            tr = requests.get(f"https://cdn.syndication.twimg.com/tweet-result?id={tid}&token=x&lang=en", timeout=10)
-            if tr.status_code != 200: continue
-            t = tr.json()
-            if not t or t.get("__typename") != "Tweet": continue
-        except Exception:
-            continue
-        usr = t.get("user", {})
-        out[tid] = _rec(tid, "@" + (usr.get("screen_name") or ""), usr.get("name") or "",
-                        (t.get("text") or "").replace("\n", " "), t.get("created_at") or "",
-                        f"https://x.com/{usr.get('screen_name')}/status/{tid}",
-                        t.get("favorite_count") or 0, t.get("conversation_count") or 0, 0, "xai",
-                        blue=usr.get("is_blue_verified", False))
+        r = _cdn_resolve(tid, "xai")
+        if r: out[tid] = r
     return list(out.values())
 
 
@@ -360,6 +474,12 @@ def _emit(posts, args):
         out = open(args.out, "w") if args.out else sys.stdout
         for r in posts: print(json.dumps(r), file=out)
         if args.out: out.close(); print(f"{len(posts)} posts -> {args.out}", file=sys.stderr)
+        return
+    if getattr(args, "list", None) or getattr(args, "hydrate", False):   # multi-author stream, show handles
+        label = f"list {args.list}" if getattr(args, "list", None) else "hydrated"
+        print(f"{len(posts)} tweets ({label})\n")
+        for r in posts[:args.limit]:
+            print(f"{r['time'][:16]}  {r['handle'][:16]:16} ♥{r['likes']:>6} ↻{r['reposts']:>5}  {r['text'][:58]}")
         return
     if getattr(args, "track", False):                          # track: a tweet stream, top/newest first
         print(f"{len(posts)} tweets from @{args.query.lstrip('@')}\n")
@@ -442,9 +562,31 @@ def main():
     ap.add_argument("--probe", action="store_true",
                     help="rate-limit probe: hammer the endpoint until X returns a non-200, report the cutoff")
     ap.add_argument("--max-req", type=int, default=120, help="probe: max requests to fire")
+    ap.add_argument("--reload", action="store_true",
+                    help="probe: re-navigate each iteration instead of scrolling (for views that run out of pagination, e.g. a profile timeline)")
+    ap.add_argument("--list", metavar="LISTID",
+                    help="track a whole List by id via ListLatestTweetsTimeline (one call = every member, its own bucket)")
+    ap.add_argument("--hydrate", action="store_true",
+                    help="keyless bulk-hydrate: read tweet ids (or JSONL) on stdin, resolve full tweets via the CDN (no account)")
     args = ap.parse_args()
     if args.login: asyncio.run(login()); return
-    if not args.query: ap.error("give a query/handle, or --login first")
+    if args.hydrate:
+        ids = []
+        for line in sys.stdin:
+            line = line.strip()
+            if not line: continue
+            if line[0] in "{[":
+                try: ids.append(str(json.loads(line)["id"]))
+                except Exception: pass
+            else:
+                mm = re.search(r'(\d{8,})', line)
+                if mm: ids.append(mm.group(1))
+        _emit(find_hydrate(ids, 450), args)
+        return
+    if args.list:
+        _emit(asyncio.run(find_list(args.list, args.pages, args.delay, args.headed)), args)
+        return
+    if not args.query: ap.error("give a query/handle, --list ID, --hydrate (stdin), or --login first")
     if args.probe:
         from collections import Counter
         if args.track:
@@ -454,7 +596,7 @@ def main():
         else:
             url = f"https://x.com/search?q={quote(args.query)}&src=typed_query&f={args.tab}"
             marker = "SearchTimeline"
-        log = asyncio.run(probe_session(url, marker, args.max_req, args.delay))
+        log = asyncio.run(probe_session(url, marker, args.max_req, args.delay, args.reload))
         print(json.dumps({"endpoint": marker, **_probe_report(log)}, indent=2))
         print("status counts:", dict(Counter(s for s, _ in log)), file=sys.stderr)
         return

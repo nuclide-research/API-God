@@ -72,3 +72,45 @@ def test_tweet_ts_orders_chronologically():
     older = xsearch._tweet_ts("Wed May 27 10:00:00 +0000 2026")
     newer = xsearch._tweet_ts("Sat May 30 10:00:00 +0000 2026")
     assert newer > older > 0
+
+
+def test_extract_list_timeline_multi_author():
+    # ListLatestTweetsTimeline body: same tweet shape, path is list.tweets_timeline; the point is
+    # ONE response carries many authors (the multiplexer proven live: 22 authors / 1 call)
+    def tw(sn, tid):
+        return {"result": {"legacy": {"id_str": tid, "full_text": "x", "favorite_count": 1, "retweet_count": 0},
+                "core": {"user_results": {"result": {"legacy": {"screen_name": sn, "followers_count": 1},
+                "core": {"name": sn}, "is_blue_verified": False}}}}}
+    def entry(sn, tid):
+        return {"content": {"itemContent": {"itemType": "TimelineTweet", "tweet_results": tw(sn, tid)}}}
+    instructions = [{"type": "TimelineAddEntries", "entries": [entry("alpha", "1"), entry("bravo", "2")]}]
+    body = {"data": {"list": {"tweets_timeline": {"timeline": {"instructions": instructions}}}}}
+    recs = xsearch.extract_list_timeline(body)
+    assert len(recs) == 2
+    assert {r["handle"] for r in recs} == {"@alpha", "@bravo"}
+
+
+def test_cdn_resolve_parses(monkeypatch):
+    class R:
+        status_code = 200
+        def json(self):
+            return {"__typename": "Tweet", "text": "hi there", "created_at": "Sat May 30 10:00:00 +0000 2026",
+                    "favorite_count": 7, "conversation_count": 2,
+                    "user": {"screen_name": "zed", "name": "Zed", "is_blue_verified": True}}
+    monkeypatch.setattr("requests.get", lambda *a, **k: R())
+    r = xsearch._cdn_resolve("123", "hydrate")
+    assert r["id"] == "123" and r["handle"] == "@zed" and r["likes"] == 7
+    assert r["source"] == ["hydrate"] and r["blue"] is True
+
+
+def test_find_hydrate_filters_nonids(monkeypatch):
+    monkeypatch.setattr("time.sleep", lambda s: None)
+    calls = []
+    class R:
+        status_code = 200
+        def json(self):
+            return {"__typename": "Tweet", "text": "t", "created_at": "",
+                    "favorite_count": 0, "conversation_count": 0, "user": {"screen_name": "u", "name": "U"}}
+    monkeypatch.setattr("requests.get", lambda url, *a, **k: (calls.append(url), R())[1])
+    out = xsearch.find_hydrate(["111", "notanid", "222"], delay_ms=0)
+    assert len(out) == 2 and len(calls) == 2     # bad id skipped, two real ids resolved keyless
