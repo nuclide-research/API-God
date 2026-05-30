@@ -75,7 +75,8 @@ def _reset():
 
 def run(src):
     _reset()
-    events = [json.loads(l) for l in open(src) if l.strip()]
+    with open(src) as fh:
+        events = [json.loads(l) for l in fh if l.strip()]
     if events and not any("_ts" in e for e in events):
         print("note: capture has no _ts (pre-reconcile); index-window dedup, not identical to a live run")
     print(f"replaying {len(events)} mints (engine_core logic) ...")

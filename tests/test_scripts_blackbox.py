@@ -9,6 +9,8 @@ TD = pathlib.Path(__file__).parent.parent / "testdata"
 
 
 def test_replay_blackbox_runs():
+    n = sum(1 for l in open(TD / "mints_ts.jsonl") if l.strip())
+    assert n < 5, "fixture grew past the 5-sample warmup; black-box subprocess would hit the network"
     out = subprocess.run(
         [sys.executable, str(ENG / "replay.py"), str(TD / "mints_ts.jsonl")],
         capture_output=True, text=True, timeout=60,

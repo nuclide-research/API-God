@@ -129,6 +129,8 @@ def run():
         c.close()
 
 def stats():
+    """ALIVE-CONCENTRATED is intentionally NOT counted as survived: it is a rug-risk outcome,
+    matching the calibrator's GOOD set ({MOON, FLAT, ALIVE})."""
     c = _db()
     try:
         rows = c.execute("SELECT outcome, COUNT(*) FROM scored WHERE outcome IS NOT NULL GROUP BY outcome").fetchall()

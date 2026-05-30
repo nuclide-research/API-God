@@ -35,3 +35,24 @@ def test_recovers_serial_negative(tmp_path):              # functional sanity
     c.commit(); c.close()
     rep = oc.calibrate(p, out=None)
     assert rep is not None and rep["features"]["serial"]["coef"] < 0
+
+
+def test_mutual_info_marks_all_features_discrete(tmp_path, monkeypatch):   # #16 second half
+    import sklearn.feature_selection as fs
+    captured = {}
+    orig = fs.mutual_info_classif
+    def spy(X, y, **kw):
+        captured["df"] = kw.get("discrete_features")
+        return orig(X, y, **kw)
+    monkeypatch.setattr(fs, "mutual_info_classif", spy)
+    p = str(tmp_path / "c.db")
+    c = sqlite3.connect(p); c.execute("CREATE TABLE scored(features TEXT, outcome TEXT)")
+    rng = random.Random(2)
+    for _ in range(60):
+        good = rng.random() < 0.5
+        c.execute("INSERT INTO scored VALUES(?,?)",
+                  (json.dumps({"verified": good, "independent": rng.randint(0, 4), "serial": rng.randint(1, 3)}),
+                   "MOON" if good else "DEAD"))
+    c.commit(); c.close()
+    oc.calibrate(p, out=None)
+    assert captured["df"] == [True, True, True, True]    # independent stays declared-discrete

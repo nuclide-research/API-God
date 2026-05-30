@@ -78,3 +78,15 @@ def test_rpc_honors_retry_after(monkeypatch):               # #13 (red today: ig
     monkeypatch.setattr("requests.post", fake_post)
     monkeypatch.setattr(outcomes.time, "sleep", lambda s: slept.append(s))
     assert outcomes._rpc("m", []) == "ok" and 2.0 in slept
+
+
+def test_record_closes_connection_on_error(monkeypatch):    # #12
+    import pytest
+    closed = {"v": False}
+    class C:
+        def execute(self, *a, **k): raise RuntimeError("boom")
+        def close(self): closed["v"] = True
+    monkeypatch.setattr(outcomes, "_db", lambda: C())
+    with pytest.raises(RuntimeError):
+        outcomes.record({"mint": "m", "features": {}})
+    assert closed["v"] is True       # try/finally closed the connection despite the error
