@@ -1,0 +1,4 @@
+{"mint":"Mint1pump","traderPublicKey":"W1","name":"Alpha","symbol":"ALP","solAmount":0.2,"uri":"ipfs://a","_ts":1000.0}
+{"mint":"Mint2pump","traderPublicKey":"W2","name":"Alpha","symbol":"ALP","solAmount":6.0,"uri":"ipfs://b","_ts":1100.0}
+{"mint":"Mint3pump","traderPublicKey":"W3","name":"Beta","symbol":"BET","solAmount":0.3,"uri":"ipfs://c","_ts":1450.0}
+{"mint":"Mint4pump","traderPublicKey":"W1","name":"Alpha","symbol":"ALP","solAmount":5.0,"uri":"ipfs://d","_ts":1500.0}
