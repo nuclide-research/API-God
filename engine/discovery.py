@@ -1,14 +1,25 @@
 """Discovery stage: 'who, besides the creator, is posting this coin's CA?'
-xAI x_search FINDS candidate posts -> free syndication resolver gets each author -> count distinct
-authors that are NOT the coin's own claimed handle. That count is the independent (hard-to-fake) signal.
 
-Gated on XAI_API_KEY: no key -> returns {'searched': False} so the engine logs a 'would-run' candidate
+FINDS candidate posts -> gets each author + text -> counts distinct authors that are NOT the coin's
+own claimed handle. That count is the independent (hard-to-fake) corroboration signal.
+
+Two finders:
+  xai      (default, when XAI_API_KEY is set) xAI x_search -> free syndication resolver per post.
+  session  (opt-in: DISCOVERY_SESSION=1) subprocess the upgraded ../search/xsearch.py session backend,
+           which reads X's SearchTimeline off the wire. FREE, but it drives a real X session in a
+           browser, so it is for backtest / replay use, never the live firehose (a browser per coin
+           is an X-ban risk). Off by default keeps the live engine keyless and browser-free.
+
+No key and no session opt-in -> returns {'searched': False}: the engine logs a 'would-run' candidate
 (for cost accounting) without fabricating data or spending money."""
-import os, re, requests
+import os, re, json, sys, subprocess, requests
 from engine_core import classify
 
 XAI_KEY = os.environ.get("XAI_API_KEY")
 XAI_MODEL = os.environ.get("XAI_MODEL", "grok-4.3")
+SESSION_DISCOVERY = os.environ.get("DISCOVERY_SESSION") == "1"     # opt-in free path (off the hot path)
+XSEARCH = os.path.join(os.path.dirname(__file__), "..", "search", "xsearch.py")
+
 
 def xai_x_search(query):
     """Returns list of post URLs, or None if not searched (no key)."""
@@ -34,6 +45,7 @@ def xai_x_search(query):
     walk(d)
     return list(dict.fromkeys(cites))
 
+
 def _post(tid):
     """Returns (author_handle, text) for a tweet id, or None."""
     try:
@@ -45,24 +57,67 @@ def _post(tid):
     except Exception:
         return None
 
-def discover_independent(mint, own_handle, symbol=None):
-    """Search CA (precise) + $ticker (broad). Count distinct non-own posters, split by what they actually
-    said: text contains the CA -> ca_poster (unambiguous); text has only the $ticker -> ticker_poster
-    (ambiguous, ticker reuse). Returns separate counts so the bonus can weight them differently."""
-    query = f'"{mint}"' + (f' OR ${symbol}' if symbol else '')
+
+def _xai_pairs(query):
+    """xAI finds -> syndication resolves each -> list of (author, text). None if no key."""
     urls = xai_x_search(query)
     if urls is None:
+        return None
+    pairs = []
+    for u in urls:
+        kind, _, tid = classify(u)
+        if kind != "status" or not tid:
+            continue
+        post = _post(tid)
+        if post and post[0]:
+            pairs.append(post)
+    return pairs
+
+
+def _session_pairs(query):
+    """Free, opt-in: subprocess the xsearch session backend -> list of (author, text).
+    Runs out-of-process so the engine carries no browser of its own. None on failure."""
+    try:
+        r = subprocess.run([sys.executable, XSEARCH, query, "--backend", "session", "--pages", "3", "--json"],
+                           capture_output=True, text=True, timeout=150)
+    except Exception:
+        return None
+    pairs = []
+    for line in r.stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            d = json.loads(line)
+        except Exception:
+            continue
+        h = (d.get("handle") or "").lstrip("@")
+        if h:
+            pairs.append((h, d.get("text") or ""))
+    return pairs
+
+
+def discover_independent(mint, own_handle, symbol=None):
+    """Search CA (precise) + $ticker (broad). Count distinct non-own posters, split by what they
+    actually said: text contains the CA -> ca_poster (unambiguous); text has only the $ticker ->
+    ticker_poster (ambiguous, ticker reuse). Returns separate counts so the bonus can weight them
+    differently. Backend: xAI when keyed, else the session subprocess when DISCOVERY_SESSION=1, else
+    none (searched: False)."""
+    query = f'"{mint}"' + (f' OR ${symbol}' if symbol else '')
+    if XAI_KEY:
+        pairs = _xai_pairs(query)
+    elif SESSION_DISCOVERY:
+        pairs = _session_pairs(query)
+    else:
+        pairs = None
+    if pairs is None:
         return {"searched": False, "n_ca": 0, "n_ticker": 0, "authors": []}
     own = (own_handle or "").lower()
     tick_re = re.compile(r'\$' + re.escape(symbol) + r'(?![A-Za-z0-9])', re.I) if symbol else None
     ca_authors, tick_authors = set(), set()
-    for u in urls:
-        kind, _, tid = classify(u)
-        if kind != "status" or not tid: continue
-        post = _post(tid)
-        if not post: continue
-        author, text = post
-        if not author or author.lower() == own: continue
+    for author, text in pairs:
+        if not author or author.lower() == own:
+            continue
         if mint and mint in text:
             ca_authors.add(author)
         elif tick_re and tick_re.search(text):

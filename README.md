@@ -1,146 +1,100 @@
 # API-God
 
-API-God is a free X (Twitter) intelligence tool. 
-Core function: give it any search term (topic, person, company, ticker, hashtag, event) and it returns a structured list of who on 
-X is posting about it, what they said, and engagement numbers, sortable and saveable.
+A keyless signal engine for Solana memecoins, and the X-search tooling it grew out of.
 
-The point is doing this without X's paid API, which runs tens of thousands a month for this access tier.
-  
-Find who's talking about anything on X (Twitter), for free. No API key. No $30,000-a-month data bill.
+API-God watches every new coin the moment it mints. It finds the X account behind the coin, checks whether that account is telling the truth, and scores it. It pays for no API. Every source it reads is public.
 
-## What it does
+## What is in here
 
-Give it a search: a topic, a person, a company, a coin, a hashtag, an event, anything. It finds the
-people on X posting about it and hands you a clean list: who they are, what they said, and how much
-engagement each post got. Sortable, saveable, structured.
+Three parts.
 
-It does this without X's paid API, which costs tens of thousands of dollars a month for this kind of
-access.
+- `engine/` is the product. A live pipeline from the mint firehose to a scored, verified signal. Plus a learning loop that checks later what happened to each coin.
+- `search/` is `xsearch`, a tool that finds who is posting about a topic or coin on X. The engine can call it for corroboration.
+- `legacy/` is the retired first version: a browser that rode your logged-in sessions and captured traffic from any site. Kept for reference.
 
-## The tool: xsearch
+## The idea
 
-```
-cd search
-pip install -r requirements.txt
-python xsearch.py --login          # one-time login, for the free backend
-python xsearch.py "any topic"      # then search anything
-python xsearch.py '$TICKER'
-python xsearch.py "a person or company"
-```
+X sells search behind paid developer tiers. A coin's social proof looks like it should cost money to verify. It does not. The data is already moving over public channels:
 
-Three ways to run it:
+- New pump.fun mints arrive in real time on a public PumpPortal websocket. No key.
+- Each mint carries a link to its metadata JSON, and that JSON holds the project's X link. No key.
+- A specific tweet resolves to full JSON through `cdn.syndication.twimg.com`, the endpoint that draws embedded tweet cards. No key, no cookie.
 
-| Backend | Cost | Needs | Account risk |
-|---------|------|-------|--------------|
-| `session` | Free | Your own X login | Yes. Drives your logged-in account, so heavy use can get it rate-limited or suspended. |
-| `xai` | ~$0.005 per search | An xAI key | None. No X login, nothing tied to your account. |
-| `both` | Sum of the two | Both of the above | Same as `session`, since it runs that path too. |
+So the signal is free to read. That is the easy part. The hard part is why the engine exists. The coin's creator writes its own social link. The link is a claim. Impersonation is the norm here. The engine's real job is verification, not fetching.
 
-> **Warning: the `session` and `both` backends can get your X account suspended.** They drive your own
-> logged-in account through X's web search. Heavy or fast use looks like automation and X can
-> rate-limit or ban the account. The `xai` backend carries no such risk: it uses no X login.
+## How the engine works
 
-Pick `session` to pay nothing and accept the account risk. Pick `xai` to pay half a cent and carry no
-risk. Pick `both` when you want the widest result set and have already accepted the `session` risk.
+A single coin moves through the pipeline like this.
 
-### session vs xai: two different keys, neither is X's paid API
+1. **Source.** One websocket to PumpPortal streams every new mint. Exactly one connection, and it backs off on drops. Reconnect spam earns an IP ban.
+2. **Zone.** The creator's own first buy is ranked against a rolling window of recent buys. Ordinary buys are green and dropped. Unusually large buys are amber or red and worth the work. This is how the engine ignores the noise and spends effort only where real money went in.
+3. **Enrich.** The engine fetches the mint's metadata through a pool of IPFS gateways. It reads the coin's claimed `twitter` link and sorts it into one of: a specific tweet, a bare profile, a search, a community.
+4. **Resolve.** If the link points at a specific tweet, the engine pulls that tweet's full JSON from the syndication CDN.
+5. **Verify.** Two checks, both independent of the coin. Does the tweet's real author match the handle in the claimed link? Does the tweet's text mention the coin's ticker or contract address? A handle mismatch voids the verification outright. A coin cannot earn trust by pointing at someone else's words.
+6. **Discover.** Optionally, who else is posting this coin's contract address, and are they independent of the creator? Independent posters are the one thing a scammer cannot fake cheaply.
+7. **Penalize clusters.** If one wallet or one account is behind a batch of coins, every coin in the batch is marked down. Serial farming is the strongest predictor of a bad outcome.
+8. **Score and record.** The engine gives the coin a number and a written reason, and logs the result for the learning loop.
 
-Neither backend uses X's official paid API. That is the whole point. The two paths get the same data a
-different way.
+Here is a real run over coins captured live from the firehose:
 
-- **`session` uses no key at all.** It uses your own X login cookies and drives x.com's web search like
-  a logged-in person, automated. That automation is what breaks X's terms, and that is why the account
-  can get suspended. Free, risky.
-- **`xai` uses an xAI key, not an X key.** xAI is a separate company. The key is for Grok's search
-  service, not for X's data API. There is no X login behind it, so there is no X account to suspend.
-  Cheap, safe.
+![engine replay](docs/img/engine-replay.png)
 
-So the free path is cookie automation and carries ban risk. The paid path runs through a different
-vendor and carries none. The official X API, the one that does not get you banned, is the
-tens-of-thousands-a-month bill this tool exists to skip.
+Read it as a story. The one coin that verified clean rose to the top. The coin claiming `@dogeofficialceo` lost its verification. Someone else wrote the tweet it linked. Ten of the resolved coins linked a tweet that was either not theirs or never mentioned the coin. Coins from repeated wallets sank to the bottom. The engine spent nothing. Every `discovery-skip` is the paid stage switching itself off with no key set.
 
-Full guide: `search/README.md`.
+## The learning loop
 
-## How it works
+A score is a guess until you check it. `outcomes.py` records every scored coin, then comes back at T+6h, T+24h, and T+72h to ask the chain what happened. It reads last on-chain activity and holder concentration from the free Solana RPC, and price, liquidity, and volume from the free DexScreener API. From those it labels each coin DEAD, ALIVE, FLAT, or MOON. The calibrator then reads that labeled history and learns which features predicted a good outcome. It caps how far any weight can move in one cycle and refuses to learn from too little data. On synthetic data it recovers that serial farming hurts and independent corroboration helps.
 
-Two free pieces, glued together.
+## xsearch
 
-1. **Finding posts.** To find who is posting about something, the tool either drives X's own search
-   through your logged-in session (the `session` backend) or asks xAI's search service (the `xai`
-   backend). Either way it ends up with a set of post links.
-2. **Reading posts.** Each post is read through `cdn.syndication.twimg.com`, the public endpoint that
-   powers embedded tweets across the web. It returns a post's text, author, and engagement as clean
-   JSON, with no login and no key. That is the part that makes it free.
+`xsearch` answers one question: who is talking about this topic or coin on X. It has two backends.
 
-Find the posts, then read each one through the free public endpoint. No paid X API anywhere in the loop.
+- `session` is free. It rides your saved X login and reads X's own `SearchTimeline` response off the wire as the page loads. It does not scrape the painted page and it does not call the paid API. It reads the exact JSON the web app already receives. That JSON carries follower count, blue status, views, and quote count.
+- `xai` is clean. xAI's `x_search` finds candidate posts, and the same free syndication CDN turns each into a structured record. About half a cent per search, no account risk.
+- `both` runs the two together and tags each account by who found it. An account found by both backends independently is corroborated.
 
-## Where the idea came from
-
-The data you want, who is saying what on X, sits behind X's official API. That API costs tens of
-thousands of dollars a month at the volume you would actually need.
-
-You do not need it. X already hands the same data out for free in two places. Its own web app reads
-posts through endpoints that work as long as you are logged in, no key. And every tweet embedded on any
-website is served by a public endpoint that needs no login at all. Both were sitting in plain sight.
-
-### Why those endpoints stay open
-
-X gates this data behind the paid API, but it cannot close the two free doors without breaking its own
-product. The logged-in web endpoints are what x.com itself runs on. Kill them and the website dies. The
-syndication endpoint at `cdn.syndication.twimg.com` renders embedded tweets on every news site, blog,
-and forum. Kill it and tweet embeds break everywhere. The data leaks through the parts of X that have to
-stay public. The tool reads the same doors the browser already uses.
-
-We tested the idea on the noisiest thing we could find: the flood of new Solana coins minting every
-minute, each with an X link attached. The free path worked end to end, find the posts, read them through
-the public endpoint, all for free. Then the obvious part, the same find-and-read works for anything: a
-person, a company, an event, not just coins. That is the tool.
-
-## How it compares
-
-The two doors are not secret. Other tools use them. `twscrape` and `twikit` drive a logged-in account
-against X's internal endpoints, the same primitive as the `session` backend. The
-`cdn.syndication.twimg.com` read trick has been written up for years and runs in deployed services like
-`xreader`. The primitives are known. What is built on them here is the part that is not.
-
-- **Two backends, one tool.** The other scrapers pick one path and live on it. This one runs a
-  logged-in path and a no-login paid path as named, swappable backends.
-- **`both` merges them.** Run `session` and `xai` together and combine the results. One sourcing path
-  misses what the other catches. Merging widens the net in a single search.
-- **`xai` needs no X account.** The logged-in scrapers all carry account-ban risk. They all run on a
-  logged-in account. The `xai` backend sources post links through xAI's search service with no X login,
-  so there is no account to lose.
-- **Topic first, not object first.** Most tools archive a known handle or a known tweet. This one starts
-  from a topic and finds who is posting about it.
-
-One known limit comes with the read door. `cdn.syndication.twimg.com` returns HTTP 200 with an empty
-body when it fails. Cloud IPs see frequent blanks and 404s. Running from a logged-in user's own machine
-stays close to the case that works. Heavy cloud-side use does not.
-
-## One example of what you can build on it: a Solana coin tracker
-
-`engine/` is a prototype that points the same idea at one specific use: the flood of new Solana coins
-launching every minute. It is an **example**, one application, not the purpose of the project. The
-search tool above is the general thing.
-
-Given the firehose, the engine:
-1. Drops the ~95% that is junk with a self-calibrating filter (it reads the live stream's own
-   distribution instead of a fixed cutoff) plus name dedup, before any network call.
-2. For the survivors, finds the X account behind each coin, checks whether the linked tweet really
-   mentions the coin or is riding a stranger's, and flags wallets spraying many coins.
-3. Ranks what is left.
-
-It also has a **learning loop** (`outcomes.py`, `outcomes_calibrate.py`): it logs every coin it scored,
-hours later reads on-chain what actually happened (died, still trading, graduated to a real DEX), labels
-the outcome, and a calibrator learns which signals predicted the good ones and proposes weight changes.
-That is what lets it improve instead of staying a fixed guess. Honest limit: the loop only has a verdict
-once coins have aged a few hours. Details in `docs/` and `engine/README.md`.
+![xsearch session](docs/img/xsearch-session.png)
 
 ## Layout
 
 ```
-search/   xsearch: find who's talking about anything on X (the product)
-engine/   example app: a Solana coin tracker + a learning loop that scores its own picks against outcomes
-legacy/   retired Node browser-capture tool
-docs/     design notes (engine design, outcome-feedback-loop spec)
+engine/   live pipeline, replay harness, outcome loop, shared scoring core, adversarial tests
+search/   xsearch (session + xai backends)
+legacy/   retired Node browser-interception layer
+docs/     design specs and these images
 ```
+
+## Install
+
+```
+python -m venv .venv && source .venv/bin/activate
+pip install -r engine/requirements.txt     # engine + outcome loop
+pip install -r search/requirements.txt     # xsearch
+playwright install chromium                 # for the session backend and the search tool
+```
+
+## Use
+
+```
+# engine
+python engine/live.py                  # stream the firehose and score live (runs a time budget, then a summary)
+python engine/replay.py mints.jsonl    # re-score a captured run offline
+python engine/outcomes.py run          # check and label scored coins past their window
+python engine/outcomes.py stats        # does a higher score predict a better outcome?
+python engine/stress.py                # adversarial tests of the scoring core
+
+# search
+python search/xsearch.py --login                      # one-time: save your X session
+python search/xsearch.py "solana" --backend session   # who is posting about it
+python search/xsearch.py '$GIGA' --backend both --json # corroborated, as JSONL
+```
+
+## Design notes
+
+- **Keyless by default.** The live engine needs no API key and runs no browser. The paid xAI stage and the session-search stage are both opt-in.
+- **Verification is the product.** The pipeline treats every social link as a lie until the tweet proves otherwise.
+- **The session path is bannable**, so it stays off the engine's hot path. Set `DISCOVERY_SESSION=1` to use it for backtests. Never point it at the live firehose.
+
+## License
+
+MIT. Nicholas Kloster.
