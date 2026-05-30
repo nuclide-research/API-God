@@ -118,3 +118,24 @@ def fetch_meta(uri, gateways, requests, max_bytes=1_000_000, timeout=6):
         except Exception as e:
             last = e
     raise last or RuntimeError("no-gateway")
+
+def resolve_tweet(tid, timeout=10):
+    """Canonical syndication resolver, shared by the engine's callers (finding #11). Returns
+    (status, data): 'ok' (Tweet dict) / '404' / 'notjson' / 'empty' / 'tombstone' / 'neterr'.
+    requests is imported lazily so engine_core stays import-light and the call is monkeypatchable."""
+    import requests
+    try:
+        r = requests.get(f"https://cdn.syndication.twimg.com/tweet-result?id={tid}&token=x&lang=en", timeout=timeout)
+    except Exception:
+        return ("neterr", None)
+    if r.status_code == 404:
+        return ("404", None)
+    try:
+        d = r.json()
+    except Exception:
+        return ("notjson", None)
+    if not d:
+        return ("empty", None)
+    if d.get("__typename") == "TweetTombstone":
+        return ("tombstone", None)
+    return ("ok", d)

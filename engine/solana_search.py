@@ -8,7 +8,7 @@ Run with NO key -> uses mock citations (real tweet IDs) so the full flow produce
 Run with XAI_API_KEY set -> goes live against xAI.
 """
 import os, json, requests
-from engine_core import classify          # reuse the link classifier we already built
+from engine_core import classify, resolve_tweet   # reuse the shared classifier + resolver (#11)
 
 XAI_KEY = os.environ.get("XAI_API_KEY")
 
@@ -49,14 +49,10 @@ def status_ids(urls):
     return list(dict.fromkeys(ids))
 
 def resolve(tid):
-    """ENRICH (free, no key). Syndication CDN -> structured record. (No follower/view counts in this payload.)"""
-    try:
-        r = requests.get(f"https://cdn.syndication.twimg.com/tweet-result?id={tid}&token=x&lang=en", timeout=10)
-    except Exception:
+    """ENRICH (free, no key) via the shared resolver (#11). (No follower/view counts in this payload.)"""
+    st, d = resolve_tweet(tid)
+    if st != "ok":
         return None
-    if r.status_code != 200: return None
-    d = r.json()
-    if not d or d.get("__typename") != "Tweet": return None
     u = d.get("user", {})
     return {"author": u.get("screen_name"), "name": u.get("name"), "blue": u.get("is_blue_verified"),
             "created_at": d.get("created_at"), "likes": d.get("favorite_count"),

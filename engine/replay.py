@@ -5,7 +5,7 @@ import json, sys, threading
 from collections import deque, defaultdict, Counter
 from concurrent.futures import ThreadPoolExecutor
 import requests
-from engine_core import norm_name, cashtag_hit, classify, zone_of, score_resolved, fetch_meta, independent_bonus, dedup_name, cluster_penalty
+from engine_core import norm_name, cashtag_hit, classify, zone_of, score_resolved, fetch_meta, independent_bonus, dedup_name, cluster_penalty, resolve_tweet
 from discovery import discover_independent
 
 ROLL = 200; DEDUP_IDX_FALLBACK = 50   # index-window dedup only for old captures that predate _ts
@@ -16,16 +16,6 @@ devbuf = deque(maxlen=ROLL)
 survivors = []; gaps = Counter(); zone_count = Counter()
 by_status = defaultdict(set); by_creator = defaultdict(list); by_author = defaultdict(set)
 last_name = {}
-
-def resolve_tweet(tid):
-    try: r = requests.get(f"https://cdn.syndication.twimg.com/tweet-result?id={tid}&token=x&lang=en", timeout=10)
-    except Exception: return ("neterr", None)
-    if r.status_code == 404: return ("404", None)
-    try: d = r.json()
-    except Exception: return ("notjson", None)
-    if not d: return ("empty", None)
-    if d.get("__typename") == "TweetTombstone": return ("tombstone", None)
-    return ("ok", d)
 
 def no_signal(rec, zone, reason):
     with lock: gaps[reason] += 1

@@ -4,7 +4,7 @@ import asyncio, json, os, time, sys, threading
 from collections import deque, defaultdict, Counter
 from concurrent.futures import ThreadPoolExecutor
 import websockets, requests
-from engine_core import norm_name, cashtag_hit, classify, zone_of, score_resolved, fetch_meta, independent_bonus, dedup_name, cluster_penalty
+from engine_core import norm_name, cashtag_hit, classify, zone_of, score_resolved, fetch_meta, independent_bonus, dedup_name, cluster_penalty, resolve_tweet
 from discovery import discover_independent
 from outcomes import record
 
@@ -18,16 +18,6 @@ gaps = Counter(); zone_count = Counter()
 by_status = defaultdict(set); by_creator = defaultdict(list); by_author = defaultdict(set)
 last_name = {}
 SAFE = [False]; rlog = deque(maxlen=12); ok_streak = [0]
-
-def resolve_tweet(tid):
-    try: r = requests.get(f"https://cdn.syndication.twimg.com/tweet-result?id={tid}&token=x&lang=en", timeout=8)
-    except Exception: return ("neterr", None)
-    if r.status_code == 404: return ("404", None)
-    try: d = r.json()
-    except Exception: return ("notjson", None)
-    if not d: return ("empty", None)
-    if d.get("__typename") == "TweetTombstone": return ("tombstone", None)
-    return ("ok", d)
 
 def note_resolve(is_ok):
     with lock:

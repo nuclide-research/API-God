@@ -13,7 +13,7 @@ Two finders:
 No key and no session opt-in -> returns {'searched': False}: the engine logs a 'would-run' candidate
 (for cost accounting) without fabricating data or spending money."""
 import os, re, json, sys, subprocess, requests
-from engine_core import classify
+from engine_core import classify, resolve_tweet
 
 XAI_KEY = os.environ.get("XAI_API_KEY")
 XAI_MODEL = os.environ.get("XAI_MODEL", "grok-4.3")
@@ -47,15 +47,11 @@ def xai_x_search(query):
 
 
 def _post(tid):
-    """Returns (author_handle, text) for a tweet id, or None."""
-    try:
-        r = requests.get(f"https://cdn.syndication.twimg.com/tweet-result?id={tid}&token=x&lang=en", timeout=10)
-        if r.status_code != 200: return None
-        d = r.json()
-        if not d or d.get("__typename") != "Tweet": return None
-        return (d.get("user", {}).get("screen_name"), d.get("text") or "")
-    except Exception:
+    """Returns (author_handle, text) for a tweet id, or None. Uses the shared resolver (#11)."""
+    st, d = resolve_tweet(tid)
+    if st != "ok":
         return None
+    return (d.get("user", {}).get("screen_name"), d.get("text") or "")
 
 
 def _xai_pairs(query):
