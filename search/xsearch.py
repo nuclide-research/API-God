@@ -176,6 +176,18 @@ def extract_list_timeline(data):
     return out
 
 
+def extract_batch(data):
+    """Parse a TweetResultsByRestIds body (data.tweetResult is a flat array) -> records. Unlike the
+    keyless CDN, this path carries retweet_count."""
+    out = []
+    for e in (data.get("data", {}).get("tweetResult") or []):
+        r = _parse_timeline_tweet({"tweet_results": e})
+        if r:
+            r["source"] = ["batch"]
+            out.append(r)
+    return out
+
+
 def _drain_budget(first, delay):
     """Seconds to wait for a SearchTimeline response. The non-first budget tracks the scroll delay
     so a slow response is not cut off and pagination is not truncated (finding #2)."""
@@ -415,6 +427,68 @@ def find_hydrate(ids, delay_ms=450):
     return out
 
 
+async def find_batch(ids):
+    """Authed batch resolve via TweetResultsByRestIds: up to ~100 ids in ONE call, WITH retweet_count
+    (which the keyless CDN drops). Rides the session: captures the client's features from a live
+    request, then calls the batch endpoint from the page (bearer + ct0, no x-client-transaction-id)."""
+    if not STATE.exists():
+        print("[batch] no saved session (run: python xsearch.py --login) - skipping", file=sys.stderr)
+        return []
+    from playwright.async_api import async_playwright
+    import urllib.parse as _up
+    ids = [str(i).strip() for i in ids if str(i).strip().isdigit()]
+    if not ids:
+        return []
+    cap = {}
+
+    def on_request(req):
+        if "/graphql/" in req.url and "features" not in cap:
+            qs = _up.parse_qs(_up.urlparse(req.url).query)
+            if "features" in qs:
+                cap["features"] = qs["features"][0]
+                cap["fieldToggles"] = qs.get("fieldToggles", ["{}"])[0]
+                cap["bearer"] = req.headers.get("authorization")
+
+    async with async_playwright() as pw:                       # browser only to capture client features
+        b = await pw.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled"])
+        p = await (await b.new_context(storage_state=str(STATE))).new_page()
+        p.on("request", on_request)
+        await p.goto("https://x.com/home", wait_until="domcontentloaded", timeout=30000)
+        for _ in range(20):
+            if cap.get("features") and cap.get("bearer"):
+                break
+            await p.wait_for_timeout(500)
+        await b.close()
+    if not (cap.get("features") and cap.get("bearer")):
+        print("[batch] could not capture client features/bearer", file=sys.stderr)
+        return []
+
+    # the call itself: plain requests with the saved cookies (no transaction-id needed)
+    st = json.loads(STATE.read_text())
+    cookies = {c["name"]: c["value"] for c in st.get("cookies", []) if c.get("name") and c.get("value")}
+    hdr = {"authorization": cap["bearer"], "x-csrf-token": cookies.get("ct0", ""),
+           "x-twitter-active-user": "yes", "x-twitter-auth-type": "OAuth2Session",
+           "content-type": "application/json", "x-twitter-client-language": "en",
+           "user-agent": ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")}
+    out = []
+    QID = "ZrFhyt8DYdkK3IY6_Le22g"
+    for i in range(0, len(ids), 100):                          # TweetResultsByRestIds takes ~100 ids/call
+        variables = json.dumps({"tweetIds": ids[i:i + 100], "includePromotedContent": False,
+                                "withBirdwatchNotes": False, "withVoice": True, "withCommunity": True})
+        try:
+            r = requests.get(f"https://x.com/i/api/graphql/{QID}/TweetResultsByRestIds",
+                             params={"variables": variables, "features": cap["features"], "fieldToggles": cap["fieldToggles"]},
+                             headers=hdr, cookies=cookies, timeout=20)
+            if r.status_code == 200:
+                out.extend(extract_batch(r.json()))
+            else:
+                print(f"[batch] HTTP {r.status_code}: {r.text[:120]}", file=sys.stderr)
+        except Exception as e:
+            print(f"[batch] {e}", file=sys.stderr)
+    return out
+
+
 # ---------- backend: xai (clean, ~$0.005/search, no account risk) ----------
 def find_xai(query):
     if not XAI_KEY:
@@ -463,6 +537,22 @@ def merge(*lists):
     return list(by_id.values())
 
 
+def _stdin_ids():
+    """Read tweet ids from stdin: bare ids, status urls, or JSONL lines with an 'id' field."""
+    ids = []
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        if line[0] in "{[":
+            try: ids.append(str(json.loads(line)["id"]))
+            except Exception: pass
+        else:
+            mm = re.search(r'(\d{8,})', line)
+            if mm: ids.append(mm.group(1))
+    return ids
+
+
 def _emit(posts, args):
     """Shared output: JSONL (--json/--out), or readable. Track mode lists tweets newest/top first;
     search mode lists the distinct accounts talking, tagged by which backend(s) found each."""
@@ -475,8 +565,8 @@ def _emit(posts, args):
         for r in posts: print(json.dumps(r), file=out)
         if args.out: out.close(); print(f"{len(posts)} posts -> {args.out}", file=sys.stderr)
         return
-    if getattr(args, "list", None) or getattr(args, "hydrate", False):   # multi-author stream, show handles
-        label = f"list {args.list}" if getattr(args, "list", None) else "hydrated"
+    if getattr(args, "list", None) or getattr(args, "hydrate", False) or getattr(args, "batch", False):  # multi-author stream
+        label = f"list {args.list}" if getattr(args, "list", None) else ("batch" if getattr(args, "batch", False) else "hydrated")
         print(f"{len(posts)} tweets ({label})\n")
         for r in posts[:args.limit]:
             print(f"{r['time'][:16]}  {r['handle'][:16]:16} ♥{r['likes']:>6} ↻{r['reposts']:>5}  {r['text'][:58]}")
@@ -568,20 +658,15 @@ def main():
                     help="track a whole List by id via ListLatestTweetsTimeline (one call = every member, its own bucket)")
     ap.add_argument("--hydrate", action="store_true",
                     help="keyless bulk-hydrate: read tweet ids (or JSONL) on stdin, resolve full tweets via the CDN (no account)")
+    ap.add_argument("--batch", action="store_true",
+                    help="authed batch resolve: read tweet ids on stdin, resolve via TweetResultsByRestIds (carries reposts the CDN drops)")
     args = ap.parse_args()
     if args.login: asyncio.run(login()); return
     if args.hydrate:
-        ids = []
-        for line in sys.stdin:
-            line = line.strip()
-            if not line: continue
-            if line[0] in "{[":
-                try: ids.append(str(json.loads(line)["id"]))
-                except Exception: pass
-            else:
-                mm = re.search(r'(\d{8,})', line)
-                if mm: ids.append(mm.group(1))
-        _emit(find_hydrate(ids, 450), args)
+        _emit(find_hydrate(_stdin_ids(), 450), args)
+        return
+    if args.batch:
+        _emit(asyncio.run(find_batch(_stdin_ids())), args)
         return
     if args.list:
         _emit(asyncio.run(find_list(args.list, args.pages, args.delay, args.headed)), args)

@@ -103,6 +103,20 @@ def test_cdn_resolve_parses(monkeypatch):
     assert r["source"] == ["hydrate"] and r["blue"] is True
 
 
+def test_extract_batch_carries_reposts():
+    # TweetResultsByRestIds body: data.tweetResult is an array; the win over the CDN is retweet_count
+    body = {"data": {"tweetResult": [
+        {"result": {"legacy": {"id_str": "5", "full_text": "a", "favorite_count": 9, "retweet_count": 42},
+                    "core": {"user_results": {"result": {"legacy": {"screen_name": "k"}, "core": {"name": "K"}}}}}},
+        {"result": {"legacy": {"id_str": "6", "full_text": "b", "favorite_count": 1, "retweet_count": 7},
+                    "core": {"user_results": {"result": {"legacy": {"screen_name": "m"}, "core": {"name": "M"}}}}}},
+    ]}}
+    recs = xsearch.extract_batch(body)
+    assert len(recs) == 2
+    assert recs[0]["id"] == "5" and recs[0]["reposts"] == 42      # the field the keyless CDN drops
+    assert recs[1]["reposts"] == 7 and {r["source"][0] for r in recs} == {"batch"}
+
+
 def test_find_hydrate_filters_nonids(monkeypatch):
     monkeypatch.setattr("time.sleep", lambda s: None)
     calls = []
