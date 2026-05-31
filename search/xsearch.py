@@ -660,7 +660,7 @@ def main():
                     help="track a @handle via its timeline (UserTweets) - a SEPARATE rate-limit bucket from search")
     ap.add_argument("--replies", action="store_true", help="track: include @-replies (UserTweetsAndReplies)")
     ap.add_argument("--probe", action="store_true",
-                    help="rate-limit probe: hammer the endpoint until X returns a non-200, report the cutoff")
+                    help="rate-limit probe: read X's x-rate-limit-* headers (the live quota) and hammer to the 429 cutoff; works on search, --track, or --list")
     ap.add_argument("--max-req", type=int, default=120, help="probe: max requests to fire")
     ap.add_argument("--reload", action="store_true",
                     help="probe: re-navigate each iteration instead of scrolling (for views that run out of pagination, e.g. a profile timeline)")
@@ -678,16 +678,19 @@ def main():
     if args.batch:
         _emit(asyncio.run(find_batch(_stdin_ids())), args)
         return
-    if args.list:
+    if args.list and not args.probe:
         _emit(asyncio.run(find_list(args.list, args.pages, args.delay, args.headed)), args)
         return
-    if not args.query: ap.error("give a query/handle, --list ID, --hydrate (stdin), or --login first")
+    if not args.query and not (args.probe and args.list): ap.error("give a query/handle, --list ID, --hydrate (stdin), or --login first")
     if args.probe:
         from collections import Counter
         if args.track:
             h = args.query.lstrip("@")
             url = f"https://x.com/{h}" + ("/with_replies" if args.replies else "")
             marker = "UserTweetsAndReplies" if args.replies else "UserTweets"
+        elif args.list:
+            url = f"https://x.com/i/lists/{args.list}"          # ListLatestTweetsTimeline = its own bucket
+            marker = "ListLatestTweetsTimeline"
         else:
             url = f"https://x.com/search?q={quote(args.query)}&src=typed_query&f={args.tab}"
             marker = "SearchTimeline"
