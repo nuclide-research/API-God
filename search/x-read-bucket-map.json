@@ -1,0 +1,560 @@
+{
+  "AuthenticatePeriscope": {
+    "type": "query",
+    "queryId": "r7VUmxbfqNkx7uwjgONSNw",
+    "limit": 500,
+    "status": 200
+  },
+  "BakeryQuery": {
+    "type": "query",
+    "queryId": "pROR-yRiBVsEjJyHt3fvhg",
+    "limit": 500,
+    "status": 200
+  },
+  "BlockedAccountsAll": {
+    "type": "query",
+    "queryId": "C1iiUGBYiHMmJ0WSbQk_4w",
+    "limit": 500,
+    "status": 200
+  },
+  "BlockedAccountsImported": {
+    "type": "query",
+    "queryId": "S06RVrS4nzweUKDnj_ZnCw",
+    "limit": 500,
+    "status": 200
+  },
+  "BlueVerifiedFollowers": {
+    "type": "query",
+    "queryId": "iYaPJI11EY8VtCL3hrKU9A",
+    "limit": 500,
+    "status": 422
+  },
+  "BookmarkSearchTimeline": {
+    "type": "query",
+    "queryId": "vctB13iDc4trZdZGzhNdVQ",
+    "limit": 500,
+    "status": 422
+  },
+  "CombinedLists": {
+    "type": "query",
+    "queryId": "TyLzpBAxtoCsJjWKKHTGZQ",
+    "limit": 500,
+    "status": 422
+  },
+  "CommunitiesExploreTimeline": {
+    "type": "query",
+    "queryId": "76nxjcfcWIl_dSW4x30I5w",
+    "limit": 500,
+    "status": 200
+  },
+  "CommunitiesMainDiscoveryModule": {
+    "type": "query",
+    "queryId": "hkNFPEByL2Vb99Xu3oBVPg",
+    "limit": 500,
+    "status": 200
+  },
+  "CommunitiesMainPageTimeline": {
+    "type": "query",
+    "queryId": "tpmgU8hKfnZGWp0-6m91yw",
+    "limit": 500,
+    "status": 200
+  },
+  "CommunitiesMembershipsSlice": {
+    "type": "query",
+    "queryId": "keBi-IFOHQFR59XV8-JCbw",
+    "limit": 500,
+    "status": 200
+  },
+  "CommunitiesMembershipsTimeline": {
+    "type": "query",
+    "queryId": "6Lvbloki2xWjR-RM98Uybw",
+    "limit": 500,
+    "status": 422
+  },
+  "CommunitiesRankedTimeline": {
+    "type": "query",
+    "queryId": "affWqIB9aLjW786hUf7fdQ",
+    "limit": 500,
+    "status": 200
+  },
+  "CommunityAboutTimeline": {
+    "type": "query",
+    "queryId": "hRUg75kM84l7JSRq_ymhBA",
+    "limit": 50,
+    "status": 422
+  },
+  "CommunityByRestId": {
+    "type": "query",
+    "queryId": "vLS7mhOqMLtGZdXqFP1DEg",
+    "limit": 500,
+    "status": 422
+  },
+  "CommunityDiscoveryTimeline": {
+    "type": "query",
+    "queryId": "t-6xlEVaVZKUBTC105zffA",
+    "limit": 500,
+    "status": 200
+  },
+  "CommunityHashtagsTimeline": {
+    "type": "query",
+    "queryId": "UUBmLIjegHRIUaputAUaqw",
+    "limit": 500,
+    "status": 422
+  },
+  "CommunityMediaLoggedOutTimeline": {
+    "type": "query",
+    "queryId": "m1UOGnJxiA_tqdPdNn3U0g",
+    "limit": 50,
+    "status": 422
+  },
+  "CommunityMediaTimeline": {
+    "type": "query",
+    "queryId": "AZ_TabZBZeBg28AevZDM0w",
+    "limit": 500,
+    "status": 422
+  },
+  "CommunityMemberRelationshipTypeahead": {
+    "type": "query",
+    "queryId": "wLq8nJhuzS5Tzq2p-dgIlw",
+    "limit": 500,
+    "status": 422
+  },
+  "CommunityModerationTweetCasesSlice": {
+    "type": "query",
+    "queryId": "Z51tCY2auQCEerByuflIww",
+    "limit": 500,
+    "status": 422
+  },
+  "CommunityTweetModerationLogSlice": {
+    "type": "query",
+    "queryId": "Rz59w9NAqctGuL_dLsPiZA",
+    "limit": 50,
+    "status": 422
+  },
+  "CommunityTweetsLoggedOutTimeline": {
+    "type": "query",
+    "queryId": "9ST6bL38c2-MzQZQAg1xSg",
+    "limit": 50,
+    "status": 422
+  },
+  "CommunityTweetsRankedLoggedOutTimeline": {
+    "type": "query",
+    "queryId": "YiW95m9RfVNcagv47sYVUA",
+    "limit": 50,
+    "status": 422
+  },
+  "CommunityTweetsTimeline": {
+    "type": "query",
+    "queryId": "pXYASW5kVylF3YMrGJovLg",
+    "limit": 500,
+    "status": 422
+  },
+  "CommunityUserRelationshipTypeahead": {
+    "type": "query",
+    "queryId": "_qsnOaYZy00m-KSiTIFyEA",
+    "limit": 500,
+    "status": 422
+  },
+  "ConnectTabTimeline": {
+    "type": "query",
+    "queryId": "INI5ftFjyBS4akGw6NHjMw",
+    "limit": 500,
+    "status": 200
+  },
+  "DataSaverMode": {
+    "type": "query",
+    "queryId": "xF6sXnKJfS2AOylzxRjf6A",
+    "limit": 500,
+    "status": 422
+  },
+  "ExplorePage": {
+    "type": "query",
+    "queryId": "ZOpNFXhFFI3YQtArxykOLw",
+    "limit": 500,
+    "status": 200
+  },
+  "ExploreSidebar": {
+    "type": "query",
+    "queryId": "CAIer_7yYdgfbPbmFxApJA",
+    "limit": 500,
+    "status": 200
+  },
+  "FinanceSearchTags": {
+    "type": "query",
+    "queryId": "4BInQe9OX1qSSZYKT5LB2w",
+    "limit": 200,
+    "status": 422
+  },
+  "Followers": {
+    "type": "query",
+    "queryId": "Wp9x7NPOJ5klmf5H-350gw",
+    "limit": 50,
+    "status": 404
+  },
+  "FollowersYouKnow": {
+    "type": "query",
+    "queryId": "yhfZS84JalNlEbjgnCPM4A",
+    "limit": 500,
+    "status": 422
+  },
+  "Following": {
+    "type": "query",
+    "queryId": "XRzHZz4sLnhSgz55WGMCbg",
+    "limit": 500,
+    "status": 422
+  },
+  "GenericTimelineById": {
+    "type": "query",
+    "queryId": "wv4VPj4oH-yFD3cuQC7Tbg",
+    "limit": 500,
+    "status": 422
+  },
+  "GetUserClaims": {
+    "type": "query",
+    "queryId": "aQ-b88K_Lp7dgHX53MqNQQ",
+    "limit": 500,
+    "status": 200
+  },
+  "GlobalCommunitiesLatestPostSearchTimeline": {
+    "type": "query",
+    "queryId": "ILv5w7wRUoe1tBDnG2lWZg",
+    "limit": 50,
+    "status": 422
+  },
+  "GlobalCommunitiesPostSearchTimeline": {
+    "type": "query",
+    "queryId": "EIVzJSQ5ozafYLMpnBmDVQ",
+    "limit": 50,
+    "status": 422
+  },
+  "HomeLatestTimeline": {
+    "type": "query",
+    "queryId": "v8D8YuUcH9097nKOVvRPgA",
+    "limit": 500,
+    "status": 422
+  },
+  "HomeTimeline": {
+    "type": "query",
+    "queryId": "-M5P8LkjBRfeMF2MRJfbqA",
+    "limit": 500,
+    "status": 422
+  },
+  "Likes": {
+    "type": "query",
+    "queryId": "-a4kQTjMROm_V1cOpbNyXQ",
+    "limit": 500,
+    "status": 422
+  },
+  "ListByRestId": {
+    "type": "query",
+    "queryId": "t9AbdyHaJVfjL9jsODwgpQ",
+    "limit": 500,
+    "status": 422
+  },
+  "ListBySlug": {
+    "type": "query",
+    "queryId": "LDQpQ89B5ipR8izCKrWU0g",
+    "limit": 500,
+    "status": 422
+  },
+  "ListCreationRecommendedUsers": {
+    "type": "query",
+    "queryId": "QHVsevQu7fd6Zi1FCONB_A",
+    "limit": 500,
+    "status": 422
+  },
+  "ListEditRecommendedUsers": {
+    "type": "query",
+    "queryId": "cVGVhuXWx_PM-9pc7zvY9Q",
+    "limit": 500,
+    "status": 422
+  },
+  "ListLatestTweetsTimeline": {
+    "type": "query",
+    "queryId": "K77PSxWq_St4HLusAV9nVg",
+    "limit": 500,
+    "status": 422
+  },
+  "ListMembers": {
+    "type": "query",
+    "queryId": "EM7YRaM3gCnzDESmchA7RA",
+    "limit": 500,
+    "status": 422
+  },
+  "ListMemberships": {
+    "type": "query",
+    "queryId": "EPnwxyczkTMNNqPjlCBP9Q",
+    "limit": 500,
+    "status": 422
+  },
+  "ListOwnerships": {
+    "type": "query",
+    "queryId": "N_9HejNT9Amo1tDF7Gb_TQ",
+    "limit": 500,
+    "status": 422
+  },
+  "ListRankedTweetsTimeline": {
+    "type": "query",
+    "queryId": "DAnQBdxFqdUPA4LjOk1yxQ",
+    "limit": 500,
+    "status": 422
+  },
+  "ListSearchTimeline": {
+    "type": "query",
+    "queryId": "RDutAjSxtO2avriQ-dlOXg",
+    "limit": 500,
+    "status": 422
+  },
+  "ListSubscribers": {
+    "type": "query",
+    "queryId": "hj1GNPmMw8tV5NvagfyG4g",
+    "limit": 500,
+    "status": 422
+  },
+  "ListsDiscovery": {
+    "type": "query",
+    "queryId": "zAGFvs4LrLYlmG_T_MeUhg",
+    "limit": 500,
+    "status": 200
+  },
+  "ListsManagementPageTimeline": {
+    "type": "query",
+    "queryId": "I96vj5eyw1D9g_NA0wWj3Q",
+    "limit": 500,
+    "status": 200
+  },
+  "MediaTabVideoMixer": {
+    "type": "query",
+    "queryId": "ETTrVPqmVFnufY0waouGbg",
+    "limit": 50,
+    "status": 200
+  },
+  "ModeratedTimeline": {
+    "type": "query",
+    "queryId": "9VLnWsN_m8Fl-gkhQmaajA",
+    "limit": 500,
+    "status": 422
+  },
+  "MutedAccounts": {
+    "type": "query",
+    "queryId": "uBgNDXn1YT3icouZnLITIQ",
+    "limit": 500,
+    "status": 200
+  },
+  "PaymentsUsersTypeahead": {
+    "type": "query",
+    "queryId": "pnP0TpmPEJiiJuN9T-LU4Q",
+    "limit": 5000,
+    "status": 422
+  },
+  "PinnedTimelines": {
+    "type": "query",
+    "queryId": "SnNm4YWv4Xu26VSx-MIYlw",
+    "limit": 500,
+    "status": 200
+  },
+  "ProfileFilter": {
+    "type": "query",
+    "queryId": "gGstS47UZbvFD2p3t5I3aw",
+    "limit": 150,
+    "status": 422
+  },
+  "ProfileUserPhoneState": {
+    "type": "query",
+    "queryId": "5kUWP8C1hcd6omvg6HXXTQ",
+    "limit": 50,
+    "status": 200
+  },
+  "SearchTimeline": {
+    "type": "query",
+    "queryId": "-TFXKoMnMTKdEXcCn-eahw",
+    "limit": 50,
+    "status": 404
+  },
+  "SimilarPosts": {
+    "type": "query",
+    "queryId": "nu65ZRsAjlbBRSx9KrB9Lw",
+    "limit": 500,
+    "status": 422
+  },
+  "SuperFollowers": {
+    "type": "query",
+    "queryId": "wiS2Q9pcfnUYYpVIntP9cQ",
+    "limit": 500,
+    "status": 422
+  },
+  "SupportedLanguages": {
+    "type": "query",
+    "queryId": "fZ5uZVeledO5SAseKnmTUg",
+    "limit": 50,
+    "status": 200
+  },
+  "TVHomeMixer": {
+    "type": "query",
+    "queryId": "8588Ik5HwJgaMqKI2Rff9g",
+    "limit": 900,
+    "status": 200
+  },
+  "TrendHistory": {
+    "type": "query",
+    "queryId": "w6B3NCSV1-LeFfZb4w_bSA",
+    "limit": 500,
+    "status": 422
+  },
+  "TrendRelevantUsers": {
+    "type": "query",
+    "queryId": "zimah2oxkQGhbH95ITVZBw",
+    "limit": 500,
+    "status": 422
+  },
+  "TweetDetail": {
+    "type": "query",
+    "queryId": "6uCvnic3m5reVuehkvHa3w",
+    "limit": 150,
+    "status": 422
+  },
+  "TweetResultByRestId": {
+    "type": "query",
+    "queryId": "SgZWKwvBiOKrSC0QeOGvXw",
+    "limit": 500,
+    "status": 422
+  },
+  "TweetResultsByRestIds": {
+    "type": "query",
+    "queryId": "ZrFhyt8DYdkK3IY6_Le22g",
+    "limit": 500,
+    "status": 422
+  },
+  "Upsells": {
+    "type": "query",
+    "queryId": "Sg3BvwapuCMIjLJ7LGPhMA",
+    "limit": 50,
+    "status": 200
+  },
+  "UrtFixtures": {
+    "type": "query",
+    "queryId": "uJXmidIT_z8n7YpCSldqDA",
+    "limit": 500,
+    "status": 200
+  },
+  "UserArticlesTweets": {
+    "type": "query",
+    "queryId": "U6I0BUEXvZAr-votl5Ep4g",
+    "limit": 500,
+    "status": 422
+  },
+  "UserBusinessProfileTeamTimeline": {
+    "type": "query",
+    "queryId": "8d9eeRZ5Yp9gZ2ln1J2d8Q",
+    "limit": 500,
+    "status": 422
+  },
+  "UserByRestId": {
+    "type": "query",
+    "queryId": "VQfQ9wwYdk6j_u2O4vt64Q",
+    "limit": null,
+    "status": 403
+  },
+  "UserByScreenName": {
+    "type": "query",
+    "queryId": "IGgvgiOx4QZndDHuD3x9TQ",
+    "limit": 150,
+    "status": 422
+  },
+  "UserCreatorSubscribers": {
+    "type": "query",
+    "queryId": "yoI4XyFIktVmHocw8-xsyw",
+    "limit": 500,
+    "status": 422
+  },
+  "UserCreatorSubscriptions": {
+    "type": "query",
+    "queryId": "-sz0S5f03wNPkv1_RaTZtg",
+    "limit": 500,
+    "status": 422
+  },
+  "UserHighlightsTweets": {
+    "type": "query",
+    "queryId": "4bWw4msDjbo5aPNa02WYFg",
+    "limit": 50,
+    "status": 422
+  },
+  "UserMedia": {
+    "type": "query",
+    "queryId": "g_rGPF0fLON-M9cyVjXuzA",
+    "limit": 500,
+    "status": 422
+  },
+  "UserPreferences": {
+    "type": "query",
+    "queryId": "xFxU-O8hEYe74ovNVU74jA",
+    "limit": 500,
+    "status": 200
+  },
+  "UserPromotableTweets": {
+    "type": "query",
+    "queryId": "0fv9-NfDiv4pzty9-qvk8A",
+    "limit": 500,
+    "status": 422
+  },
+  "UserPromotedTweets": {
+    "type": "query",
+    "queryId": "U3oMDt3azkjRWjqOgwlXWQ",
+    "limit": 50,
+    "status": 422
+  },
+  "UserSessionsList": {
+    "type": "query",
+    "queryId": "vJ-XatpmQSG8bDch8-t9Jw",
+    "limit": 500,
+    "status": 200
+  },
+  "UserSuperFollowTweets": {
+    "type": "query",
+    "queryId": "QA1O5incWjeE-T51lIFLAA",
+    "limit": 500,
+    "status": 422
+  },
+  "UserTweets": {
+    "type": "query",
+    "queryId": "PNd0vlufvrcIwrAnBYKE9g",
+    "limit": 50,
+    "status": 422
+  },
+  "UserTweetsAndReplies": {
+    "type": "query",
+    "queryId": "EqtpEwt0CoQXmDfq5DKH0A",
+    "limit": 500,
+    "status": 404
+  },
+  "UsersByRestIds": {
+    "type": "query",
+    "queryId": "a74irv24XPYDjy5LSNQUXg",
+    "limit": null,
+    "status": 403
+  },
+  "UsersByScreenNames": {
+    "type": "query",
+    "queryId": "BDxiyyoNcdR0I_mJcryMLA",
+    "limit": 50,
+    "status": 422
+  },
+  "UsersVerifiedAvatars": {
+    "type": "query",
+    "queryId": "x3JZoNX9ubSzoCIHoYo2NA",
+    "limit": 500,
+    "status": 422
+  },
+  "Viewer": {
+    "type": "query",
+    "queryId": "_8ClT24oZ8tpylf_OSuNdg",
+    "limit": 100,
+    "status": 200
+  },
+  "getAltTextPromptPreference": {
+    "type": "query",
+    "queryId": "PFIxTk8owMoZgiMccP0r4g",
+    "limit": 500,
+    "status": 200
+  }
+}

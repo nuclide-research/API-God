@@ -1,6 +1,6 @@
 # search
 
-Two tools. `xsearch.py` reads X keyless on your saved login. `ingest.py` runs `xsearch`'s primitives as a continuous pipeline.
+A keyless X toolkit. `xsearch.py` reads X on your saved browser login; the rest build on its primitives. `ingest.py` runs them as a continuous pipeline, `livepipe.py` and `reactive.py` stream engagement in real time, and `census.py` and `fielddiff.py` map X's own GraphQL surface (rate-limit buckets and per-operation field exposure).
 
 ## Setup (once)
 
@@ -23,7 +23,7 @@ One query tool, several modes. Each reads a different X GraphQL endpoint off the
 | Track many | `xsearch.py --list <id>` | `ListLatestTweetsTimeline` | one call returns every member of a List |
 | Hydrate | `... \| xsearch.py --hydrate` | syndication CDN | ids on stdin to full tweets, keyless, no account |
 | Batch | `... \| xsearch.py --batch` | `TweetResultsByRestIds` | ids to full tweets with reposts, authed |
-| Probe | `xsearch.py "q" --probe` | any of the above | find where X rate-limits you |
+| Probe | `xsearch.py "q" --probe` | search / `--track` / `--list` | read X's live `x-rate-limit-*` quota, or hammer to the 429 |
 | xAI | `xsearch.py "q" --backend xai` | xAI x_search + CDN | paid (~$0.005), no account risk |
 
 ### How a search works
@@ -88,3 +88,28 @@ python ingest.py --list <id> --interval 30 --cycles 20 --out stream.jsonl
 ```
 
 The producer is the scarce, rate-limited side: one List call per poll. The consumer is the cheap, keyless side. The two are split on purpose, so a watchlist runs all day without touching the search wall.
+
+## Mapping the surface
+
+Two tools read X's own GraphQL surface rather than its content. Both ride the saved session and are read-only.
+
+### census.py: the rate-limit map
+
+X stamps `x-rate-limit-limit`/`remaining`/`reset` on every GraphQL response, including a 422 that fails validation. So one throwaway request to any operation reveals its bucket, with no browser and no valid query. `census.py` pulls the live queryId map from `main.js`, then sweeps every read operation:
+
+```bash
+python census.py                  # human table + bucket histogram
+python census.py --json map.json  # save the full per-op map
+```
+
+The read is cheap but not free: each probe spends one token of the bucket it measures. Mutations are skipped unless you pass `--include-mutations`. A 2026-05-30 sweep of 93 reads: 500 is the default (67 ops), 17 scraping-attractive ops are throttled to 50 (search, the timelines, followers, the community feeds), and a few are special (typeahead 5000, tweet-detail 150). The snapshot is in `x-read-bucket-map.json`.
+
+### fielddiff.py: which op leaks the most
+
+X serves the same object through several resolvers, and they do not return the same fields. `fielddiff.py` resolves one tweet through the keyless CDN and the authed `TweetResultsByRestIds`, then diffs the field-name vocabulary of each:
+
+```bash
+python fielddiff.py <tweet_id>
+```
+
+For tweet 20 the CDN returned 31 field names and the authed path 106. The 86 authed-only fields are every engagement count (retweet, quote, reply, bookmark, views) and all viewer-relationship fields (blocking, following, muting), which cannot exist on an anonymous response. Introspection is off, but diffing two resolvers recovers the practical schema delta with no introspection query.
