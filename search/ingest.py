@@ -13,6 +13,7 @@ The split is the whole point: discovery is the scarce, rate-limited side (kept t
 hydration is the cheap, keyless side. Search's 45/15-min wall is never touched.
 
   python ingest.py --list 1283884222881640448 --interval 30 --cycles 5 --out /tmp/x-stream.jsonl
+  python ingest.py --search "solana" --interval 30 --cycles 20     # watch a topic, low-noise
   python ingest.py --list <id> --hydrate            # also re-poll live likes/replies per new tweet
 """
 import asyncio, json, sys, os, argparse, time
@@ -32,9 +33,11 @@ def _new(posts, seen):
     return out
 
 
-async def watch(list_id, interval, cycles, out_path, hydrate, pages):
-    """Poll the List `cycles` times, `interval` seconds apart; new tweets flow producer -> queue ->
-    consumer -> JSONL sink. Returns run stats."""
+async def watch(fetch, label, interval, cycles, out_path, hydrate):
+    """Poll `fetch` (a coroutine returning tweet records) `cycles` times, `interval` seconds apart;
+    new tweets flow producer -> queue -> consumer -> JSONL sink. The source is pluggable: a List
+    (ListLatestTweetsTimeline, one call = every member) or a topic search (SearchTimeline, paced
+    under the wall). Returns run stats."""
     seen = set()
     q = asyncio.Queue()
     stats = {"polled": 0, "new": 0}
@@ -42,7 +45,7 @@ async def watch(list_id, interval, cycles, out_path, hydrate, pages):
     async def producer():
         for c in range(cycles):
             try:
-                posts = await xsearch.find_list(list_id, pages, 1000, False)
+                posts = await fetch()
             except Exception as e:
                 print(f"[poll {c + 1}] error: {e}", file=sys.stderr)
                 posts = []
@@ -76,16 +79,25 @@ async def watch(list_id, interval, cycles, out_path, hydrate, pages):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="continuous X ingestion: poll a List -> dedup -> hydrate -> JSONL sink")
-    ap.add_argument("--list", required=True, metavar="LISTID", help="List id to watch (one call = every member)")
+    ap = argparse.ArgumentParser(description="continuous X ingestion: poll a source -> dedup -> hydrate -> JSONL sink")
+    src = ap.add_mutually_exclusive_group(required=True)
+    src.add_argument("--list", metavar="LISTID", help="watch a List (one call = every member, its own bucket)")
+    src.add_argument("--search", metavar="QUERY", help="watch a topic via SearchTimeline (e.g. 'solana' or '$SOL'), paced under the wall")
     ap.add_argument("--interval", type=int, default=30, help="seconds between polls")
     ap.add_argument("--cycles", type=int, default=5, help="number of polls (bounded run)")
     ap.add_argument("--pages", type=int, default=3, help="scroll pages per poll")
     ap.add_argument("--out", default="/tmp/x-stream.jsonl", help="JSONL sink")
     ap.add_argument("--hydrate", action="store_true", help="re-poll live engagement keyless per new tweet")
     args = ap.parse_args()
-    stats = asyncio.run(watch(args.list, args.interval, args.cycles, args.out, args.hydrate, args.pages))
-    print(f"done: {stats['new']} new tweets -> {args.out}", file=sys.stderr)
+    if args.list:
+        label = f"list {args.list}"
+        fetch = lambda: xsearch.find_list(args.list, args.pages, 1000, False)
+    else:
+        label = f"search {args.search!r}"
+        fetch = lambda: xsearch.find_session(args.search, "live", args.pages, 1000, False)
+    print(f"[ingest] watching {label} every {args.interval}s x{args.cycles}", file=sys.stderr)
+    stats = asyncio.run(watch(fetch, label, args.interval, args.cycles, args.out, args.hydrate))
+    print(f"done: {stats['new']} new tweets ({label}) -> {args.out}", file=sys.stderr)
 
 
 if __name__ == "__main__":
